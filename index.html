@@ -320,7 +320,7 @@ function switchTab(view) {
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   $(`view-${view}`).classList.add('active');
   document.querySelector(`.nav-item[data-view="${view}"]`)?.classList.add('active');
-  if(view==='chart'){initChart();loadChartCandles();loadOrderbook();}
+  if(view==='chart'){setTimeout(()=>{initChart();loadChartCandles();loadOrderbook();},50);}
   if(view==='markets')renderMarkets();
   if(view==='watchlist')renderWatchlist();
   if(view==='alerts')renderAlertsView();
