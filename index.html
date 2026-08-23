@@ -10,7 +10,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect fill='%232a82d9' width='192' height='192' rx='32'/%3E%3Ctext x='96' y='120' font-size='96' text-anchor='middle' fill='white'%3E⚡%3C/text%3E%3C/svg%3E">
 <title>Hyperliquid Terminal</title>
-<meta name="version" content="v5.2">
+<meta name="version" content="v5.3">
 <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 :root{--bg:#0a1325;--card:#0f1d35;--elevated:#152640;--border:#1a3050;--text:#e8eef5;--muted:#5b7a99;--accent:#2a82d9;--accent2:#3b82f6;--green:#10b981;--red:#ef4444;--safe:#22c55e;}
@@ -111,9 +111,10 @@ html,body{background:var(--bg);color:var(--text);height:100vh;height:100dvh;over
 #chart-container{height:360px;position:relative;}
 .chart-panel{padding:16px;}
 
-/* Orderbook panel */
-.ob-panel{display:none;}
-.ob-panel.active{display:block;}
+.chart-panel{display:none;}
+.chart-panel.active{display:block;}
+#time-bar{display:flex;}
+#time-bar.hidden{display:none;}
 .ob-header{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);padding:0 16px 8px;}
 .ob-row{display:flex;justify-content:space-between;align-items:center;padding:6px 16px;font-size:13px;font-family:'SF Mono',monospace;}
 .ob-row .bar{position:absolute;left:0;top:0;bottom:0;opacity:0.1;z-index:0;}
@@ -219,7 +220,7 @@ html,body{background:var(--bg);color:var(--text);height:100vh;height:100dvh;over
         <div class="chart-tab" data-panel="trades">Trades</div>
         <div class="chart-tab" data-panel="alerts">Alerts</div>
       </div>
-      <div class="time-bar">
+      <div class="time-bar" id="time-bar">
         <button class="time-btn" data-tf="1m">1m</button>
         <button class="time-btn active" data-tf="1h">1h</button>
         <button class="time-btn" data-tf="4h">4h</button>
@@ -462,7 +463,15 @@ function switchTab(view) {
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   $(`view-${view}`).classList.add('active');
   document.querySelector(`.nav-item[data-view="${view}"]`)?.classList.add('active');
-  if(view==='chart'){setTimeout(()=>{initChart();if(chart){const c=$('chart-container');chart.resize(c.clientWidth||window.innerWidth-32,c.clientHeight||360);chart.timeScale().fitContent();}if(!isHip3(currentCoin))loadChartCandles();else showSynthChartMsg();loadOrderbook();renderChartAlerts();},80);}
+  if(view==='chart'){
+    // reset to Chart sub-panel
+    document.querySelectorAll('.chart-tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.ob-panel').forEach(p=>p.classList.remove('active'));
+    document.querySelector('.chart-tab[data-panel="chart"]')?.classList.add('active');
+    $('panel-chart').classList.add('active');
+    $('time-bar').classList.remove('hidden');
+    setTimeout(()=>{initChart();if(chart){const c=$('chart-container');chart.resize(c.clientWidth||window.innerWidth-32,c.clientHeight||360);chart.timeScale().fitContent();}if(!isHip3(currentCoin))loadChartCandles();else showSynthChartMsg();loadOrderbook();renderChartAlerts();},80);
+  }
   if(view==='markets')renderMarkets();
   if(view==='watchlist')renderWatchlist();
   if(view==='alerts')renderAlertsView();
@@ -853,6 +862,8 @@ document.querySelectorAll('.chart-tab').forEach(tab=>{
     tab.classList.add('active');
     const panel=tab.dataset.panel;
     $(`panel-${panel}`).classList.add('active');
+    if(panel==='chart') $('time-bar').classList.remove('hidden');
+    else $('time-bar').classList.add('hidden');
     if(panel==='orderbook')loadOrderbook();
     if(panel==='trades')renderTrades();
     if(panel==='alerts')renderChartAlerts();
