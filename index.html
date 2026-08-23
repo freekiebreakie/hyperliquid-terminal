@@ -10,7 +10,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect fill='%232a82d9' width='192' height='192' rx='32'/%3E%3Ctext x='96' y='120' font-size='96' text-anchor='middle' fill='white'%3E⚡%3C/text%3E%3C/svg%3E">
 <title>Hyperliquid Terminal</title>
-<meta name="version" content="v5.1">
+<meta name="version" content="v5.2">
 <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 :root{--bg:#0a1325;--card:#0f1d35;--elevated:#152640;--border:#1a3050;--text:#e8eef5;--muted:#5b7a99;--accent:#2a82d9;--accent2:#3b82f6;--green:#10b981;--red:#ef4444;--safe:#22c55e;}
@@ -343,22 +343,102 @@ let coinVolumes = {}; // {coinName: dayNtlVlm}
 
 /* HIP-3 synthetic markets on Hyperliquid (discovered via l2Book, not in allMids/meta) */
 const hip3Coins = [
-  {name:'xyz:GOLD', friendly:'GOLD', category:'Commodity', icon:'AU'},
-  {name:'xyz:SILVER', friendly:'SILVER', category:'Commodity', icon:'AG'},
-  {name:'xyz:BRENTOIL', friendly:'BRENTOIL', category:'Commodity', icon:'BR'},
-  {name:'xyz:SP500', friendly:'SP500', category:'Index', icon:'SP'},
   {name:'xyz:AAPL', friendly:'AAPL', category:'Stock', icon:'AA'},
-  {name:'xyz:TSLA', friendly:'TSLA', category:'Stock', icon:'TS'},
-  {name:'xyz:NVDA', friendly:'NVDA', category:'Stock', icon:'NV'},
+  {name:'xyz:ALUMINIUM', friendly:'ALUMINIUM', category:'Commodity', icon:'AL'},
+  {name:'xyz:AMAT', friendly:'AMAT', category:'Stock', icon:'AM'},
   {name:'xyz:AMD', friendly:'AMD', category:'Stock', icon:'AM'},
-  {name:'xyz:AMZN', friendly:'AMZN', category:'Stock', icon:'AZ'},
-  {name:'xyz:MSFT', friendly:'MSFT', category:'Stock', icon:'MS'},
-  {name:'xyz:META', friendly:'META', category:'Stock', icon:'MT'},
-  {name:'xyz:GOOGL', friendly:'GOOGL', category:'Stock', icon:'GO'},
+  {name:'xyz:AMZN', friendly:'AMZN', category:'Stock', icon:'AM'},
+  {name:'xyz:ARM', friendly:'ARM', category:'Stock', icon:'AR'},
+  {name:'xyz:ASML', friendly:'ASML', category:'Stock', icon:'AS'},
+  {name:'xyz:AVGO', friendly:'AVGO', category:'Stock', icon:'AV'},
+  {name:'xyz:BABA', friendly:'BABA', category:'Stock', icon:'BA'},
+  {name:'xyz:BB', friendly:'BB', category:'Stock', icon:'BB'},
+  {name:'xyz:BE', friendly:'BE', category:'Stock', icon:'BE'},
+  {name:'xyz:BIRD', friendly:'BIRD', category:'Stock', icon:'BI'},
+  {name:'xyz:BOT', friendly:'BOT', category:'Stock', icon:'BO'},
+  {name:'xyz:BRENTOIL', friendly:'BRENTOIL', category:'Commodity', icon:'BR'},
+  {name:'xyz:BX', friendly:'BX', category:'Stock', icon:'BX'},
+  {name:'xyz:CBRS', friendly:'CBRS', category:'Stock', icon:'CB'},
+  {name:'xyz:CL', friendly:'WTIOIL', category:'Commodity', icon:'WT'},
   {name:'xyz:COIN', friendly:'COIN', category:'Stock', icon:'CO'},
-  {name:'xyz:EURUSD', friendly:'EURUSD', category:'FX', icon:'EU'},
-  {name:'xyz:GBPUSD', friendly:'GBPUSD', category:'FX', icon:'GB'},
-  {name:'xyz:USDJPY', friendly:'USDJPY', category:'FX', icon:'JP'},
+  {name:'xyz:COPPER', friendly:'COPPER', category:'Commodity', icon:'CO'},
+  {name:'xyz:CORN', friendly:'CORN', category:'Commodity', icon:'CO'},
+  {name:'xyz:COST', friendly:'COST', category:'Stock', icon:'CO'},
+  {name:'xyz:CRCL', friendly:'CRCL', category:'Stock', icon:'CR'},
+  {name:'xyz:CRWV', friendly:'CRWV', category:'Stock', icon:'CR'},
+  {name:'xyz:CXMT', friendly:'CXMT', category:'Pre-IPO', icon:'CX'},
+  {name:'xyz:DELL', friendly:'DELL', category:'Stock', icon:'DE'},
+  {name:'xyz:DKNG', friendly:'DKNG', category:'Stock', icon:'DK'},
+  {name:'xyz:DRAM', friendly:'DRAM', category:'Stock', icon:'DR'},
+  {name:'xyz:DXY', friendly:'DXY', category:'FX', icon:'DX'},
+  {name:'xyz:EBAY', friendly:'EBAY', category:'Stock', icon:'EB'},
+  {name:'xyz:EUR', friendly:'EURUSD', category:'FX', icon:'EU'},
+  {name:'xyz:EWJ', friendly:'EWJ', category:'Stock', icon:'EW'},
+  {name:'xyz:EWT', friendly:'EWT', category:'Stock', icon:'EW'},
+  {name:'xyz:EWY', friendly:'EWY', category:'Stock', icon:'EW'},
+  {name:'xyz:EWZ', friendly:'EWZ', category:'Stock', icon:'EW'},
+  {name:'xyz:GBP', friendly:'GBPUSD', category:'FX', icon:'GB'},
+  {name:'xyz:GIGADEV', friendly:'GIGADEV', category:'Stock', icon:'GI'},
+  {name:'xyz:GME', friendly:'GME', category:'Stock', icon:'GM'},
+  {name:'xyz:GOLD', friendly:'GOLD', category:'Commodity', icon:'GO'},
+  {name:'xyz:GOOGL', friendly:'GOOGL', category:'Stock', icon:'GO'},
+  {name:'xyz:HIMS', friendly:'HIMS', category:'Stock', icon:'HI'},
+  {name:'xyz:HOOD', friendly:'HOOD', category:'Stock', icon:'HO'},
+  {name:'xyz:HYUNDAI', friendly:'HYUNDAI', category:'Stock', icon:'HY'},
+  {name:'xyz:IBIDEN', friendly:'IBIDEN', category:'Stock', icon:'IB'},
+  {name:'xyz:IBM', friendly:'IBM', category:'Stock', icon:'IB'},
+  {name:'xyz:INTC', friendly:'INTC', category:'Stock', icon:'IN'},
+  {name:'xyz:JP225', friendly:'JP225', category:'Index', icon:'JP'},
+  {name:'xyz:JPY', friendly:'USDJPY', category:'FX', icon:'US'},
+  {name:'xyz:KIOXIA', friendly:'KIOXIA', category:'Stock', icon:'KI'},
+  {name:'xyz:KR200', friendly:'KR200', category:'Index', icon:'KR'},
+  {name:'xyz:KRW', friendly:'USDKRW', category:'FX', icon:'US'},
+  {name:'xyz:LITE', friendly:'LITE', category:'Stock', icon:'LI'},
+  {name:'xyz:LLY', friendly:'LLY', category:'Stock', icon:'LL'},
+  {name:'xyz:META', friendly:'META', category:'Stock', icon:'ME'},
+  {name:'xyz:MINIMAX', friendly:'MINIMAX', category:'Stock', icon:'MI'},
+  {name:'xyz:MRVL', friendly:'MRVL', category:'Stock', icon:'MR'},
+  {name:'xyz:MSFT', friendly:'MSFT', category:'Stock', icon:'MS'},
+  {name:'xyz:MSTR', friendly:'MSTR', category:'Stock', icon:'MS'},
+  {name:'xyz:MU', friendly:'MU', category:'Stock', icon:'MU'},
+  {name:'xyz:NATGAS', friendly:'NATGAS', category:'Commodity', icon:'NA'},
+  {name:'xyz:NBIS', friendly:'NBIS', category:'Stock', icon:'NB'},
+  {name:'xyz:NFLX', friendly:'NFLX', category:'Stock', icon:'NF'},
+  {name:'xyz:NOK', friendly:'NOK', category:'Stock', icon:'NO'},
+  {name:'xyz:NOW', friendly:'NOW', category:'Stock', icon:'NO'},
+  {name:'xyz:NVDA', friendly:'NVDA', category:'Stock', icon:'NV'},
+  {name:'xyz:ORCL', friendly:'ORCL', category:'Stock', icon:'OR'},
+  {name:'xyz:PALLADIUM', friendly:'PALLADIUM', category:'Commodity', icon:'PA'},
+  {name:'xyz:PLATINUM', friendly:'PLATINUM', category:'Commodity', icon:'PL'},
+  {name:'xyz:PLTR', friendly:'PLTR', category:'Stock', icon:'PL'},
+  {name:'xyz:PURRDAT', friendly:'PURRDAT', category:'Stock', icon:'PU'},
+  {name:'xyz:QCOM', friendly:'QCOM', category:'Stock', icon:'QC'},
+  {name:'xyz:QNT', friendly:'QNT', category:'Pre-IPO', icon:'QN'},
+  {name:'xyz:RIVN', friendly:'RIVN', category:'Stock', icon:'RI'},
+  {name:'xyz:RKLB', friendly:'RKLB', category:'Stock', icon:'RK'},
+  {name:'xyz:SHAZ', friendly:'SHAZ', category:'Stock', icon:'SH'},
+  {name:'xyz:SILVER', friendly:'SILVER', category:'Commodity', icon:'SI'},
+  {name:'xyz:SKHX', friendly:'SKHYNIX', category:'Stock', icon:'SK'},
+  {name:'xyz:SKHY', friendly:'SKHY', category:'Stock', icon:'SK'},
+  {name:'xyz:SMH', friendly:'SMH', category:'Stock', icon:'SM'},
+  {name:'xyz:SMSN', friendly:'SAMSUNG', category:'Stock', icon:'SA'},
+  {name:'xyz:SNDK', friendly:'SNDK', category:'Stock', icon:'SN'},
+  {name:'xyz:SOFTBANK', friendly:'SOFTBANK', category:'Stock', icon:'SO'},
+  {name:'xyz:SP500', friendly:'S&P500', category:'Index', icon:'S&'},
+  {name:'xyz:SPCX', friendly:'SPCX', category:'Stock', icon:'SP'},
+  {name:'xyz:STRC', friendly:'STRC', category:'Stock', icon:'ST'},
+  {name:'xyz:TSLA', friendly:'TSLA', category:'Stock', icon:'TS'},
+  {name:'xyz:TSM', friendly:'TSM', category:'Stock', icon:'TS'},
+  {name:'xyz:URNM', friendly:'URNM', category:'Stock', icon:'UR'},
+  {name:'xyz:USAR', friendly:'USAR', category:'Stock', icon:'US'},
+  {name:'xyz:VIX', friendly:'VVV', category:'Index', icon:'VV'},
+  {name:'xyz:VOL', friendly:'VOL', category:'Index', icon:'VO'},
+  {name:'xyz:WDC', friendly:'WDC', category:'Stock', icon:'WD'},
+  {name:'xyz:WHEAT', friendly:'WHEAT', category:'Commodity', icon:'WH'},
+  {name:'xyz:XLE', friendly:'XLE', category:'Stock', icon:'XL'},
+  {name:'xyz:XYZ100', friendly:'XYZ100', category:'Index', icon:'XY'},
+  {name:'xyz:ZHIPU', friendly:'ZHIPU', category:'Stock', icon:'ZH'},
+  {name:'xyz:ZM', friendly:'ZM', category:'Stock', icon:'ZM'},
 ];
 let hip3Mids = {}; // {coin: midPrice}
 
@@ -479,7 +559,7 @@ async function init(){
   updateAlertBadge();
   if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
   setInterval(refreshMids,5000);
-  setInterval(refreshHip3Mids,15000);
+  setInterval(refreshHip3Mids,30000);
   setInterval(()=>{if($('view-chart').classList.contains('active'))loadOrderbook();},5000);
 }
 
@@ -498,18 +578,20 @@ async function refreshMids(){
 }
 
 async function refreshHip3Mids(){
-  // HIP-3 markets are NOT in allMids; poll l2Book for mid prices
-  const promises = hip3Coins.map(async c=>{
-    try{
-      const ob = await hl('l2Book',{coin:c.name});
-      if(ob && ob.levels && ob.levels[0] && ob.levels[0][0] && ob.levels[1] && ob.levels[1][0]){
-        const bid = parseFloat(ob.levels[0][0].px);
-        const ask = parseFloat(ob.levels[1][0].px);
-        hip3Mids[c.name] = (bid+ask)/2;
-      }
-    }catch(e){}
-  });
-  await Promise.all(promises);
+  const batchSize = 12;
+  for(let i=0; i < hip3Coins.length; i += batchSize){
+    const batch = hip3Coins.slice(i, i+batchSize);
+    await Promise.all(batch.map(async c=>{
+      try{
+        const ob = await hl('l2Book',{coin:c.name});
+        if(ob && ob.levels && ob.levels[0] && ob.levels[0][0] && ob.levels[1] && ob.levels[1][0]){
+          const bid = parseFloat(ob.levels[0][0].px);
+          const ask = parseFloat(ob.levels[1][0].px);
+          hip3Mids[c.name] = (bid+ask)/2;
+        }
+      }catch(e){}
+    }));
+  }
   if($('view-markets').classList.contains('active')) renderMarkets();
   if($('view-watchlist').classList.contains('active')) renderWatchlist();
   updateChartHeader();
@@ -669,19 +751,20 @@ function toggleFav(coin){
 function initChart(){
   if(chart) return;
   const c=$('chart-container');
+  const BG='#0a1325', MUTED='#5b7a99', BORDER='#1a3050', ACCENT='#2a82d9', GREEN='#10b981', RED='#ef4444';
   chart=LightweightCharts.createChart(c,{
-    layout:{background:{color:'var(--bg)'},textColor:'var(--muted)'},
-    grid:{vertLines:{color:'var(--border)'},horzLines:{color:'var(--border)'}},
-    crosshair:{mode:LightweightCharts.CrosshairMode.Normal,vertLine:{color:'var(--accent)',labelBackgroundColor:'var(--accent)'},horzLine:{color:'var(--accent)',labelBackgroundColor:'var(--accent)'}},
-    rightPriceScale:{borderColor:'var(--border)'},
-    timeScale:{borderColor:'var(--border)',timeVisible:true,secondsVisible:false},
+    layout:{background:{color:BG},textColor:MUTED},
+    grid:{vertLines:{color:BORDER},horzLines:{color:BORDER}},
+    crosshair:{mode:LightweightCharts.CrosshairMode.Normal,vertLine:{color:ACCENT,labelBackgroundColor:ACCENT},horzLine:{color:ACCENT,labelBackgroundColor:ACCENT}},
+    rightPriceScale:{borderColor:BORDER},
+    timeScale:{borderColor:BORDER,timeVisible:true,secondsVisible:false},
     handleScroll:{vertTouchDrag:false},
     handleScale:{axisPressedMouseMove:false},
     width:c.clientWidth||window.innerWidth-32,
     height:c.clientHeight||360,
   });
-  candleSeries=chart.addCandlestickSeries({upColor:'var(--green)',downColor:'var(--red)',borderUpColor:'var(--green)',borderDownColor:'var(--red)',wickUpColor:'var(--green)',wickDownColor:'var(--red)'});
-  volumeSeries=chart.addHistogramSeries({color:'var(--green)',priceFormat:{type:'volume'},priceScaleId:'',scaleMargins:{top:0.85,bottom:0}});
+  candleSeries=chart.addCandlestickSeries({upColor:GREEN,downColor:RED,borderUpColor:GREEN,borderDownColor:RED,wickUpColor:GREEN,wickDownColor:RED});
+  volumeSeries=chart.addHistogramSeries({color:GREEN,priceFormat:{type:'volume'},priceScaleId:'',scaleMargins:{top:0.85,bottom:0}});
   volumeSeries.priceScale().applyOptions({scaleMargins:{top:0.85,bottom:0}});
   requestAnimationFrame(()=>{
     if(chart){chart.resize(c.clientWidth||window.innerWidth-32, c.clientHeight||360); chart.timeScale().fitContent();}
