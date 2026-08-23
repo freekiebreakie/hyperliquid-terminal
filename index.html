@@ -10,7 +10,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect fill='%232a82d9' width='192' height='192' rx='32'/%3E%3Ctext x='96' y='120' font-size='96' text-anchor='middle' fill='white'%3E⚡%3C/text%3E%3C/svg%3E">
 <title>Hyperliquid Terminal</title>
-<meta name="version" content="v5.4">
+<meta name="version" content="v5.5">
 <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 :root{--bg:#0a1325;--card:#0f1d35;--elevated:#152640;--border:#1a3050;--text:#e8eef5;--muted:#5b7a99;--accent:#2a82d9;--accent2:#3b82f6;--green:#10b981;--red:#ef4444;--safe:#22c55e;}
@@ -19,7 +19,7 @@ html,body{background:var(--bg);color:var(--text);height:100vh;height:100dvh;over
 #app{height:100%;display:flex;flex-direction:column;position:relative;}
 
 /* ===== HEADER ===== */
-.app-header{height:50px;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex-shrink:0;z-index:100;}
+.app-header{height:calc(50px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top);background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding-left:16px;padding-right:16px;flex-shrink:0;z-index:100;}
 .app-header h1{font-size:16px;font-weight:700;letter-spacing:-0.3px;display:flex;align-items:center;gap:6px;}
 .app-header .badge{font-size:9px;background:var(--accent);color:#fff;padding:2px 5px;border-radius:4px;font-weight:700;}
 .app-header .live-dot{width:6px;height:6px;border-radius:50%;background:var(--safe);animation:pulse 2s infinite;}
@@ -528,50 +528,55 @@ async function fetch24hChange(coin, force=false){
 /* ========== INIT ========== */
 async function init(){
   loadState();
-  const [meta, spotData] = await Promise.all([hl('meta'), hl('spotMetaAndAssetCtxs')]);
-  coins = meta.universe.map(c=>({name:c.name, apiName:c.name, marketType:'perp', sz:c.szDecimals||0, volume:0, friendly:c.name, category:'Crypto'}));
-  // resolve all spot pairs (canonical + non-canonical) with live volume
-  const spotMeta = spotData[0];
-  const spotAssetCtxs = spotData[1] || [];
-  const tokens = (spotMeta.tokens||[]);
-  const idxToToken = {};
-  tokens.forEach(t=> idxToToken[t.index] = t);
-  const spotCoins = [];
-  for(let idx=0; idx < (spotMeta.universe||[]).length; idx++){
-    const u = spotMeta.universe[idx];
-    const isCanon = u.isCanonical;
-    let displayName, apiName;
-    if(isCanon){
-      displayName = u.name;
-      apiName = u.name;
-    } else {
-      const t0 = idxToToken[u.tokens[0]];
-      const t1 = idxToToken[u.tokens[1]];
-      if(!t0 || !t1) continue;
-      displayName = `${t0.name}/${t1.name}`;
-      apiName = u.name;
-      spotApiMap[displayName] = apiName;
-      spotDisplayMap[apiName] = displayName;
+  try{
+    const [meta, spotData] = await Promise.all([hl('meta'), hl('spotMetaAndAssetCtxs')]);
+    coins = meta.universe.map(c=>({name:c.name, apiName:c.name, marketType:'perp', sz:c.szDecimals||0, volume:0, friendly:c.name, category:'Crypto'}));
+    // resolve all spot pairs (canonical + non-canonical) with live volume
+    const spotMeta = spotData[0];
+    const spotAssetCtxs = spotData[1] || [];
+    const tokens = (spotMeta.tokens||[]);
+    const idxToToken = {};
+    tokens.forEach(t=> idxToToken[t.index] = t);
+    const spotCoins = [];
+    for(let idx=0; idx < (spotMeta.universe||[]).length; idx++){
+      const u = spotMeta.universe[idx];
+      const isCanon = u.isCanonical;
+      let displayName, apiName;
+      if(isCanon){
+        displayName = u.name;
+        apiName = u.name;
+      } else {
+        const t0 = idxToToken[u.tokens[0]];
+        const t1 = idxToToken[u.tokens[1]];
+        if(!t0 || !t1) continue;
+        displayName = `${t0.name}/${t1.name}`;
+        apiName = u.name;
+        spotApiMap[displayName] = apiName;
+        spotDisplayMap[apiName] = displayName;
+      }
+      if(coins.find(c=>c.name===displayName)) continue;
+      const ctx = spotAssetCtxs[idx];
+      const vol = ctx ? parseFloat(ctx.dayNtlVlm || 0) : 0;
+      const friendly = getFriendly(displayName);
+      const category = getCategory(displayName);
+      spotCoins.push({name:displayName, apiName, marketType:'spot', sz:0, volume: vol, friendly, category});
     }
-    if(coins.find(c=>c.name===displayName)) continue;
-    const ctx = spotAssetCtxs[idx];
-    const vol = ctx ? parseFloat(ctx.dayNtlVlm || 0) : 0;
-    const friendly = getFriendly(displayName);
-    const category = getCategory(displayName);
-    spotCoins.push({name:displayName, apiName, marketType:'spot', sz:0, volume: vol, friendly, category});
+    coins = coins.concat(spotCoins);
+    // Add HIP-3 synthetic markets
+    coins = coins.concat(hip3Coins.map(c=>({...c, marketType:'synth', sz:0, volume:0})));
+    $('marketSubtitle').textContent = `${coins.length} markets`;
+  }catch(e){
+    console.error('init market load failed', e);
+    $('marketSubtitle').textContent = 'Markets unavailable';
   }
-  coins = coins.concat(spotCoins);
-  // Add HIP-3 synthetic markets
-  coins = coins.concat(hip3Coins.map(c=>({...c, marketType:'synth', sz:0, volume:0})));
-  $('marketSubtitle').textContent = `${coins.length} markets`;
-  await refreshMids();
-  await refreshHip3Mids();
+  try{ await refreshMids(); }catch(e){ console.error('refreshMids failed', e); }
+  try{ await refreshHip3Mids(); }catch(e){ console.error('refreshHip3Mids failed', e); }
   renderWatchlist();
   renderMarkets();
   updateAlertBadge();
   if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
-  setInterval(refreshMids,5000);
-  setInterval(refreshHip3Mids,30000);
+  setInterval(()=>{ refreshMids().catch(()=>{}); },5000);
+  setInterval(()=>{ refreshHip3Mids().catch(()=>{}); },30000);
   setInterval(()=>{if($('view-chart').classList.contains('active'))loadOrderbook();},5000);
 }
 
@@ -582,7 +587,7 @@ async function refreshMids(){
     mids[spotDisplayMap[k] || k] = v;
   }
   // 24h changes for watchlist
-  await Promise.all(watchlist.map(c=>fetch24hChange(c)));
+  await Promise.all(watchlist.map(c=>fetch24hChange(c).catch(()=>null)));
   renderWatchlist();
   renderMarkets();
   updateChartHeader();
@@ -643,7 +648,7 @@ function renderSparkline(coin, container){
 /* ========== WATCHLIST ========== */
 function renderWatchlist(){
   const grid = $('watchlistGrid');
-  const q = $('wlSearch').value.toUpperCase();
+  const q = ($('wlSearch').value||'').toUpperCase();
   let items = watchlist;
   if(q) {
     items = coins.filter(c=>{
@@ -652,13 +657,15 @@ function renderWatchlist(){
       if(friendlySearchMap[q] && friendlySearchMap[q].includes(c.name)) return true;
       return false;
     }).map(c=>c.name);
+    // include watchlist coins that match search even if they are not in coins yet
+    watchlist.forEach(c=>{ if(c.toUpperCase().includes(q) && !items.includes(c)) items.push(c); });
   }
   if(!items.length){$('emptyWL').style.display='block';grid.innerHTML='';$('watchlistCount').textContent='0 coins';return;}
   $('emptyWL').style.display='none';
   $('watchlistCount').textContent = `${watchlist.length} coin${watchlist.length!==1?'s':''} tracked`;
   grid.innerHTML = '';
   items.forEach(coin=>{
-    const p = getPrice(coin); if(!p)return;
+    const p = getPrice(coin);
     const ch = change24hCache[coin]?.change;
     const coinObj = coins.find(c=>c.name===coin);
     const display = coinObj ? (coinObj.friendly || coin) : coin;
@@ -668,17 +675,18 @@ function renderWatchlist(){
     const changeHtml = (typeof ch==='number') ? `<span class="change ${ch>=0?'up':'down'}">${ch>=0?'+':''}${ch.toFixed(2)}%</span>` : '';
     const priceCls = (typeof ch==='number') ? (ch>=0?'up':'down') : '';
     const isSynth = coinObj && coinObj.marketType==='synth';
+    const priceStr = (typeof p==='number') ? fmt(p) : '—';
     card.innerHTML = `
       <div class="watch-card-header">
         <span class="pair">${display}${isSynth?' <span style="font-size:9px;color:var(--accent)">●</span>':''}</span>
         ${changeHtml}
       </div>
-      <div class="price ${priceCls}">${fmt(p)}</div>
+      <div class="price ${priceCls}">${priceStr}</div>
       <div class="sparkline-container" id="${sparkId}"></div>`;
     card.onclick = ()=>{currentCoin=coin;switchTab('chart');};
     grid.appendChild(card);
-    if(!isSynth) renderSparkline(coin, $(sparkId));
-    else $(sparkId).innerHTML='<div style="height:44px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px">Live price only</div>';
+    if(!isSynth && typeof p==='number') renderSparkline(coin, $(sparkId));
+    else $(sparkId).innerHTML='<div style="height:44px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px">'+(typeof p==='number'?'Live price only':'Waiting for data…')+'</div>';
   });
 }
 $('wlSearch').addEventListener('input',renderWatchlist);
