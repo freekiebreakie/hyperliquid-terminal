@@ -10,7 +10,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect fill='%232a82d9' width='192' height='192' rx='32'/%3E%3Ctext x='96' y='120' font-size='96' text-anchor='middle' fill='white'%3E⚡%3C/text%3E%3C/svg%3E">
 <title>Hyperliquid Terminal</title>
-<meta name="version" content="v3">
+<meta name="version" content="v4">
 <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 :root{--bg:#0a1325;--card:#0f1d35;--elevated:#152640;--border:#1a3050;--text:#e8eef5;--muted:#5b7a99;--accent:#2a82d9;--accent2:#3b82f6;--green:#10b981;--red:#ef4444;--safe:#22c55e;}
@@ -307,6 +307,40 @@ let tradesCache = {};
 let spotApiMap = {};     // {displayName: apiName}  e.g. {"XAUM/USDC":"@456"}
 let spotDisplayMap = {}; // {apiName: displayName}  e.g. {"@456":"XAUM/USDC"}
 
+/* Friendly names for obscure spot tokens */
+const friendlyMap = {
+  "XAUT0/USDC": {friendly:"GOLD",category:"Commodity"},
+  "XAUM/USDC": {friendly:"GOLD",category:"Commodity"},
+  "HOLD/USDC": {friendly:"HYPERGOLD",category:"Commodity"},
+  "TSLA/USDC": {friendly:"TSLA",category:"Stock"},
+  "SPY/USDC": {friendly:"SPY",category:"ETF"},
+  "QQQ/USDC": {friendly:"QQQ",category:"ETF"},
+  "NASDAQ/USDC": {friendly:"NASDAQ",category:"Index"},
+  "USPYX/USDC": {friendly:"SP500",category:"ETF"},
+  "NVDAX/USDC": {friendly:"NVDA",category:"Stock"},
+  "SPYX/USDC": {friendly:"SP500",category:"ETF"},
+  "QQQX/USDC": {friendly:"QQQ",category:"ETF"},
+  "SKHYX/USDC": {friendly:"SKHYNIX",category:"Stock"},
+  "MUX/USDC": {friendly:"MICRON",category:"Stock"},
+  "SNDKX/USDC": {friendly:"SANDISK",category:"Stock"},
+  "SPCXX/USDC": {friendly:"SPACEX",category:"Stock"},
+  "TSLAX/USDC": {friendly:"TSLA",category:"Stock"},
+  "AAPLX/USDC": {friendly:"AAPL",category:"Stock"},
+  "CRCLX/USDC": {friendly:"CIRCLE",category:"Stock"},
+  "QQQM/USDC": {friendly:"QQQM",category:"ETF"},
+};
+/* Build reverse search map: friendly name -> array of coin names */
+const friendlySearchMap = {};
+for(const [name,info] of Object.entries(friendlyMap)){
+  const key = info.friendly.toUpperCase();
+  if(!friendlySearchMap[key]) friendlySearchMap[key]=[];
+  friendlySearchMap[key].push(name);
+}
+function getFriendly(coin){ return friendlyMap[coin]?.friendly || coin; }
+function getCategory(coin){ return friendlyMap[coin]?.category || (coin.endsWith('/USDC')?'Spot':'Perp'); }
+
+let coinVolumes = {}; // {coinName: dayNtlVlm}
+
 /* ========== HELPERS ========== */
 const $ = id => document.getElementById(id);
 const fmt = p => {
@@ -379,14 +413,17 @@ async function fetch24hChange(coin, force=false){
 /* ========== INIT ========== */
 async function init(){
   loadState();
-  const [meta, spotMeta] = await Promise.all([hl('meta'), hl('spotMeta')]);
-  coins = meta.universe.map(c=>({name:c.name, apiName:c.name, marketType:'perp', sz:c.szDecimals||0}));
-  // resolve all spot pairs (canonical + non-canonical)
+  const [meta, spotData] = await Promise.all([hl('meta'), hl('spotMetaAndAssetCtxs')]);
+  coins = meta.universe.map(c=>({name:c.name, apiName:c.name, marketType:'perp', sz:c.szDecimals||0, volume:0, friendly:c.name, category:'Crypto'}));
+  // resolve all spot pairs (canonical + non-canonical) with live volume
+  const spotMeta = spotData[0];
+  const spotAssetCtxs = spotData[1] || [];
   const tokens = (spotMeta.tokens||[]);
   const idxToToken = {};
   tokens.forEach(t=> idxToToken[t.index] = t);
   const spotCoins = [];
-  for(const u of (spotMeta.universe||[])){
+  for(let idx=0; idx < (spotMeta.universe||[]).length; idx++){
+    const u = spotMeta.universe[idx];
     const isCanon = u.isCanonical;
     let displayName, apiName;
     if(isCanon){
@@ -397,16 +434,19 @@ async function init(){
       const t1 = idxToToken[u.tokens[1]];
       if(!t0 || !t1) continue;
       displayName = `${t0.name}/${t1.name}`;
-      apiName = u.name; // e.g. "@1", "@456"
+      apiName = u.name;
       spotApiMap[displayName] = apiName;
       spotDisplayMap[apiName] = displayName;
     }
-    // skip if already exists as perp (unlikely)
     if(coins.find(c=>c.name===displayName)) continue;
-    spotCoins.push({name:displayName, apiName, marketType:'spot', sz:0});
+    const ctx = spotAssetCtxs[idx];
+    const vol = ctx ? parseFloat(ctx.dayNtlVlm || 0) : 0;
+    const friendly = getFriendly(displayName);
+    const category = getCategory(displayName);
+    spotCoins.push({name:displayName, apiName, marketType:'spot', sz:0, volume: vol, friendly, category});
   }
   coins = coins.concat(spotCoins);
-  $('marketSubtitle').textContent = `${coins.length} markets on Hyperliquid`;
+  $('marketSubtitle').textContent = `${coins.length} markets`;
   await refreshMids();
   renderWatchlist();
   renderMarkets();
@@ -465,7 +505,14 @@ function renderWatchlist(){
   const grid = $('watchlistGrid');
   const q = $('wlSearch').value.toUpperCase();
   let items = watchlist;
-  if(q) items = coins.filter(c=>c.name.includes(q)).map(c=>c.name);
+  if(q) {
+    items = coins.filter(c=>{
+      if(c.name.toUpperCase().includes(q)) return true;
+      if((c.friendly||'').toUpperCase().includes(q)) return true;
+      if(friendlySearchMap[q] && friendlySearchMap[q].includes(c.name)) return true;
+      return false;
+    }).map(c=>c.name);
+  }
   if(!items.length){$('emptyWL').style.display='block';grid.innerHTML='';$('watchlistCount').textContent='0 coins';return;}
   $('emptyWL').style.display='none';
   $('watchlistCount').textContent = `${watchlist.length} coin${watchlist.length!==1?'s':''} tracked`;
@@ -473,6 +520,8 @@ function renderWatchlist(){
   items.forEach(coin=>{
     const p = mids[coin]; if(!p)return;
     const ch = change24hCache[coin]?.change;
+    const coinObj = coins.find(c=>c.name===coin);
+    const display = coinObj ? (coinObj.friendly || coin) : coin;
     const card = document.createElement('div');
     card.className = 'watch-card'+(coin===currentCoin?' active-card':'');
     const sparkId = `spark_${coin}_${Date.now()}`;
@@ -480,7 +529,7 @@ function renderWatchlist(){
     const priceCls = (typeof ch==='number') ? (ch>=0?'up':'down') : '';
     card.innerHTML = `
       <div class="watch-card-header">
-        <span class="pair">${coin}</span>
+        <span class="pair">${display}</span>
         ${changeHtml}
       </div>
       <div class="price ${priceCls}">${fmt(p)}</div>
@@ -496,7 +545,14 @@ $('wlSearch').addEventListener('input',renderWatchlist);
 function renderMarkets(){
   const q = $('marketSearch').value.toUpperCase();
   const list = $('marketsList');
-  let items = coins.filter(c=>c.name.toUpperCase().includes(q));
+  let items = coins.filter(c=>{
+    if(!q) return true;
+    if(c.name.toUpperCase().includes(q)) return true;
+    if((c.friendly||'').toUpperCase().includes(q)) return true;
+    if(friendlySearchMap[q] && friendlySearchMap[q].includes(c.name)) return true;
+    return false;
+  });
+  items.sort((a,b)=> (b.volume||0) - (a.volume||0));
   list.innerHTML = '';
   items.forEach(c=>{
     const coin=c.name, p=mids[coin];
@@ -508,12 +564,17 @@ function renderMarkets(){
       ? `<div class="coin-change ${ch>=0?'up':'down'}">${ch>=0?'+':''}${ch.toFixed(2)}%</div>`
       : `<div class="coin-change"></div>`;
     const priceCls = (typeof ch==='number') ? (ch>=0?'up':'down') : '';
+    const displayLabel = c.friendly !== c.name ? c.friendly : c.name;
+    const subLabel = c.friendly !== c.name ? c.name : (c.marketType==='spot'?'Spot':'Perp');
     row.innerHTML=`
       <div class="left">
-        <div class="coin-icon">${coin.slice(0,2)}</div>
+        <div class="coin-icon">${(c.friendly||c.name).slice(0,2)}</div>
         <div>
-          <div class="coin-name">${coin}</div>
-          <div class="coin-sub">${c.marketType==='spot'?'Spot':'Perp'}</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div class="coin-name">${displayLabel}</div>
+            <span style="font-size:9px;background:var(--elevated);color:var(--muted);padding:1px 5px;border-radius:4px;">${c.category}</span>
+          </div>
+          <div class="coin-sub">${subLabel}</div>
         </div>
       </div>
       <div class="right" style="display:flex;align-items:center;">
@@ -616,7 +677,9 @@ function renderTrades(){
 
 function updateChartHeader(){
   const p=mids[currentCoin]; if(!p)return;
-  $('chartPair').textContent=currentCoin;
+  const coinObj = coins.find(c=>c.name===currentCoin);
+  const display = coinObj ? (coinObj.friendly || currentCoin) : currentCoin;
+  $('chartPair').textContent=display;
   const ch = change24hCache[currentCoin]?.change;
   const cls = (typeof ch==='number') ? (ch>=0?'up':'down') : '';
   $('chartPrice').textContent=fmt(p); $('chartPrice').className='pair-price '+cls;
