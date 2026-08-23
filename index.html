@@ -418,16 +418,16 @@ function renderWatchlist(){
   items.forEach(coin=>{
     const p = mids[coin]; if(!p)return;
     const prev = mids[coin+'_prev'];
-    const ch = prev ? pct(p,prev) : 0;
+    const ch = prev ? pct(p,prev) : null;
     const card = document.createElement('div');
     card.className = 'watch-card'+(coin===currentCoin?' active-card':'');
     const sparkId = `spark_${coin}_${Date.now()}`;
     card.innerHTML = `
       <div class="watch-card-header">
         <span class="pair">${coin}</span>
-        <span class="change ${ch>=0?'up':'down'}">${ch>=0?'+':''}${ch.toFixed(2)}%</span>
+        ${ch!==null ? `<span class="change ${ch>=0?'up':'down'}">${ch>=0?'+':''}${ch.toFixed(2)}%</span>` : ''}
       </div>
-      <div class="price ${ch>=0?'up':'down'}">${fmt(p)}</div>
+      <div class="price ${ch!==null?(ch>=0?'up':'down'):''}">${fmt(p)}</div>
       <div class="sparkline-container" id="${sparkId}"></div>`;
     card.onclick = ()=>{currentCoin=coin;switchTab('chart');};
     grid.appendChild(card);
@@ -445,7 +445,7 @@ function renderMarkets(){
   items.forEach(c=>{
     const coin=c.name, p=mids[coin];
     const prev = mids[coin+'_prev'];
-    const ch = prev && p ? pct(p,prev) : 0;
+    const ch = prev && p ? pct(p,prev) : null;
     const fav = watchlist.includes(coin);
     const row = document.createElement('div');
     row.className='market-row';
@@ -459,8 +459,8 @@ function renderMarkets(){
       </div>
       <div class="right" style="display:flex;align-items:center;">
         <div>
-          <div class="coin-price ${ch>=0?'up':'down'}">${p?fmt(p):'—'}</div>
-          <div class="coin-change ${ch>=0?'up':'down'}">${ch>=0?'+':''}${ch.toFixed(2)}%</div>
+          <div class="coin-price ${ch!==null?(ch>=0?'up':'down'):''}">${p?fmt(p):'—'}</div>
+          <div class="coin-change ${ch!==null?(ch>=0?'up':'down'):''}">${ch!==null?(ch>=0?'+':'')+ch.toFixed(2)+'%':''}</div>
         </div>
         <button class="star-btn ${fav?'favorited':''}" onclick="event.stopPropagation();toggleFav('${coin}')">${fav?'★':'☆'}</button>
       </div>`;
@@ -489,11 +489,15 @@ function initChart(){
     timeScale:{borderColor:'var(--border)',timeVisible:true,secondsVisible:false},
     handleScroll:{vertTouchDrag:false},
     handleScale:{axisPressedMouseMove:false},
+    width:c.clientWidth||window.innerWidth-32,
+    height:c.clientHeight||360,
   });
   candleSeries=chart.addCandlestickSeries({upColor:'var(--green)',downColor:'var(--red)',borderUpColor:'var(--green)',borderDownColor:'var(--red)',wickUpColor:'var(--green)',wickDownColor:'var(--red)'});
   volumeSeries=chart.addHistogramSeries({color:'var(--green)',priceFormat:{type:'volume'},priceScaleId:'',scaleMargins:{top:0.85,bottom:0}});
   volumeSeries.priceScale().applyOptions({scaleMargins:{top:0.85,bottom:0}});
-  chart.timeScale().fitContent();
+  requestAnimationFrame(()=>{
+    if(chart){chart.resize(c.clientWidth||window.innerWidth-32, c.clientHeight||360); chart.timeScale().fitContent();}
+  });
 }
 
 async function loadChartCandles(){
