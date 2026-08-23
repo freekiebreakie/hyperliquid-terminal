@@ -10,7 +10,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect fill='%232a82d9' width='192' height='192' rx='32'/%3E%3Ctext x='96' y='120' font-size='96' text-anchor='middle' fill='white'%3E⚡%3C/text%3E%3C/svg%3E">
 <title>Hyperliquid Terminal</title>
-<meta name="version" content="v5.5">
+<meta name="version" content="v5.5.1">
 <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 :root{--bg:#0a1325;--card:#0f1d35;--elevated:#152640;--border:#1a3050;--text:#e8eef5;--muted:#5b7a99;--accent:#2a82d9;--accent2:#3b82f6;--green:#10b981;--red:#ef4444;--safe:#22c55e;}
@@ -459,7 +459,7 @@ const fmt = p => {
 };
 const pct = (a,b) => ((parseFloat(a)-parseFloat(b))/parseFloat(b)*100);
 function apiName(coin){ return spotApiMap[coin] || coin; }
-function getPrice(coin){ return hip3Mids[coin] || mids[coin]; }
+function getPrice(coin){ const v = hip3Mids[coin] || mids[coin]; return typeof v === 'string' ? parseFloat(v) : v; }
 function isHip3(coin){ return coin.startsWith('xyz:'); }
 function switchTab(view) {
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
