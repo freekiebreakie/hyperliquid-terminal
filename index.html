@@ -552,7 +552,13 @@ function renderMarkets(){
     if(friendlySearchMap[q] && friendlySearchMap[q].includes(c.name)) return true;
     return false;
   });
-  items.sort((a,b)=> (b.volume||0) - (a.volume||0));
+  const featured = new Set(Object.keys(friendlyMap));
+  items.sort((a,b)=>{
+    const aF = featured.has(a.name)?1:0;
+    const bF = featured.has(b.name)?1:0;
+    if(aF!==bF) return bF-aF;
+    return (b.volume||0) - (a.volume||0);
+  });
   list.innerHTML = '';
   items.forEach(c=>{
     const coin=c.name, p=mids[coin];
