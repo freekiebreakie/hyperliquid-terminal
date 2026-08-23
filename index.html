@@ -82,7 +82,7 @@ html,body{background:var(--bg);color:var(--text);height:100vh;height:100dvh;over
 .market-row .coin-sub{font-size:12px;color:var(--muted);margin-top:1px;}
 .market-row .right{text-align:right;}
 .market-row .coin-price{font-size:15px;font-weight:700;font-family:'SF Mono',monospace;}
-.market-row .coin-change{font-size:12px;font-weight:600;margin-top:2px;}
+.market-row .coin-change{font-size:12px;font-weight:600;margin-top:2px;min-height:18px;}
 .market-row .coin-change.up{color:var(--green);}
 .market-row .coin-change.down{color:var(--red);}
 .star-btn{background:none;border:none;color:var(--muted);font-size:20px;padding:4px;cursor:pointer;margin-left:8px;}
@@ -195,7 +195,7 @@ html,body{background:var(--bg);color:var(--text);height:100vh;height:100dvh;over
     <div id="view-markets" class="view">
       <div class="watchlist-header">
         <h2>Markets</h2>
-        <p>232 perpetuals on Hyperliquid</p>
+        <p id="marketSubtitle">Loading...</p>
       </div>
       <div class="search-box">
         <input type="text" id="marketSearch" placeholder="Search coins..." autocomplete="off">
@@ -301,6 +301,7 @@ const HL = 'https://api.hyperliquid.xyz/info';
 let coins = [], mids = {}, watchlist = [], alerts = [], currentCoin = 'BTC', currentTf = '1h';
 let chart, candleSeries, volumeSeries;
 let sparklineCache = {};
+let change24hCache = {}; // {coin: {change, t}}
 let tradesCache = {};
 
 /* ========== HELPERS ========== */
@@ -351,26 +352,53 @@ async function hl(type,extra={}){
   return r.json();
 }
 
+/* ========== 24h CHANGE ========== */
+async function fetch24hChange(coin, force=false){
+  const key = coin;
+  const now = Date.now();
+  if(!force && change24hCache[key] && now - change24hCache[key].t < 120000) return change24hCache[key].change;
+  try{
+    const data = await hl('candleSnapshot',{req:{coin,interval:'1d',startTime:now-3*24*60*60*1000,endTime:now}});
+    if(!Array.isArray(data) || data.length < 2) {
+      change24hCache[key] = {change:null, t:now};
+      return null;
+    }
+    const prevClose = parseFloat(data[data.length-2].c);
+    const cur = mids[coin];
+    if(!cur || !prevClose){ change24hCache[key] = {change:null, t:now}; return null; }
+    const ch = pct(cur, prevClose);
+    change24hCache[key] = {change:ch, t:now};
+    return ch;
+  }catch(e){ change24hCache[key] = {change:null, t:now}; return null; }
+}
+
 /* ========== INIT ========== */
 async function init(){
   loadState();
-  const meta = await hl('meta');
-  coins = meta.universe.map(c=>({name:c.name,sz:c.szDecimals||0}));
+  const [meta, spotMeta] = await Promise.all([hl('meta'), hl('spotMeta')]);
+  coins = meta.universe.map(c=>({name:c.name, marketType:'perp', sz:c.szDecimals||0}));
+  // add canonical spot pairs
+  const spots = (spotMeta.universe||[]).filter(u=>u.isCanonical).map(u=>({name:u.name, marketType:'spot', sz:0}));
+  // merge, avoid duplicate names
+  for(const s of spots){
+    if(!coins.find(c=>c.name===s.name)) coins.push(s);
+  }
+  $('marketSubtitle').textContent = `${coins.length} markets on Hyperliquid`;
   await refreshMids();
   renderWatchlist();
   renderMarkets();
   updateAlertBadge();
-  // register PWA
-  if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
-  // poll
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
   setInterval(refreshMids,5000);
   setInterval(()=>{if($('view-chart').classList.contains('active'))loadOrderbook();},5000);
 }
 
 async function refreshMids(){
   mids = await hl('allMids');
+  // 24h changes for watchlist
+  await Promise.all(watchlist.map(c=>fetch24hChange(c)));
   renderWatchlist();
-  if($('view-markets').classList.contains('active'))renderMarkets();
+  renderMarkets();
   updateChartHeader();
   checkAlerts();
 }
@@ -393,7 +421,7 @@ function renderSparkline(coin, container){
     const closes = data.map(d=>parseFloat(d.c));
     const min = Math.min(...closes), max = Math.max(...closes);
     const range = max-min||1;
-    const w=200,h=50;
+    const w=200,h=44;
     const pts = closes.map((v,i)=>`${(i/(closes.length-1))*w},${h-((v-min)/range)*h}`);
     const color = closes[closes.length-1]>=closes[0]?'var(--green)':'var(--red)';
     const areaPath = `M0,${h} L${pts[0]} `+pts.slice(1).map(p=>`L${p}`).join(' ')+` L${w},${h} Z`;
@@ -417,17 +445,18 @@ function renderWatchlist(){
   grid.innerHTML = '';
   items.forEach(coin=>{
     const p = mids[coin]; if(!p)return;
-    const prev = mids[coin+'_prev'];
-    const ch = prev ? pct(p,prev) : null;
+    const ch = change24hCache[coin]?.change;
     const card = document.createElement('div');
     card.className = 'watch-card'+(coin===currentCoin?' active-card':'');
     const sparkId = `spark_${coin}_${Date.now()}`;
+    const changeHtml = (typeof ch==='number') ? `<span class="change ${ch>=0?'up':'down'}">${ch>=0?'+':''}${ch.toFixed(2)}%</span>` : '';
+    const priceCls = (typeof ch==='number') ? (ch>=0?'up':'down') : '';
     card.innerHTML = `
       <div class="watch-card-header">
         <span class="pair">${coin}</span>
-        ${ch!==null ? `<span class="change ${ch>=0?'up':'down'}">${ch>=0?'+':''}${ch.toFixed(2)}%</span>` : ''}
+        ${changeHtml}
       </div>
-      <div class="price ${ch!==null?(ch>=0?'up':'down'):''}">${fmt(p)}</div>
+      <div class="price ${priceCls}">${fmt(p)}</div>
       <div class="sparkline-container" id="${sparkId}"></div>`;
     card.onclick = ()=>{currentCoin=coin;switchTab('chart');};
     grid.appendChild(card);
@@ -440,33 +469,43 @@ $('wlSearch').addEventListener('input',renderWatchlist);
 function renderMarkets(){
   const q = $('marketSearch').value.toUpperCase();
   const list = $('marketsList');
-  let items = coins.filter(c=>c.name.includes(q));
+  let items = coins.filter(c=>c.name.toUpperCase().includes(q));
   list.innerHTML = '';
   items.forEach(c=>{
     const coin=c.name, p=mids[coin];
-    const prev = mids[coin+'_prev'];
-    const ch = prev && p ? pct(p,prev) : null;
+    const ch = change24hCache[coin]?.change;
     const fav = watchlist.includes(coin);
     const row = document.createElement('div');
     row.className='market-row';
+    const changeHtml = (typeof ch==='number')
+      ? `<div class="coin-change ${ch>=0?'up':'down'}">${ch>=0?'+':''}${ch.toFixed(2)}%</div>`
+      : `<div class="coin-change"></div>`;
+    const priceCls = (typeof ch==='number') ? (ch>=0?'up':'down') : '';
     row.innerHTML=`
       <div class="left">
         <div class="coin-icon">${coin.slice(0,2)}</div>
         <div>
           <div class="coin-name">${coin}</div>
-          <div class="coin-sub">Perp</div>
+          <div class="coin-sub">${c.marketType==='spot'?'Spot':'Perp'}</div>
         </div>
       </div>
       <div class="right" style="display:flex;align-items:center;">
         <div>
-          <div class="coin-price ${ch!==null?(ch>=0?'up':'down'):''}">${p?fmt(p):'—'}</div>
-          <div class="coin-change ${ch!==null?(ch>=0?'up':'down'):''}">${ch!==null?(ch>=0?'+':'')+ch.toFixed(2)+'%':''}</div>
+          <div class="coin-price ${priceCls}">${p?fmt(p):'—'}</div>
+          ${changeHtml}
         </div>
         <button class="star-btn ${fav?'favorited':''}" onclick="event.stopPropagation();toggleFav('${coin}')">${fav?'★':'☆'}</button>
       </div>`;
     row.onclick = ()=>{currentCoin=coin;switchTab('chart');};
     list.appendChild(row);
   });
+  // lazy fetch missing 24h changes for visible items (up to first 40)
+  const toFetch = items.slice(0,40).filter(c=>change24hCache[c.name]?.t === undefined).map(c=>c.name);
+  if(toFetch.length){
+    Promise.all(toFetch.map(c=>fetch24hChange(c))).then(()=>{
+      renderMarkets(); // re-render with new data
+    });
+  }
 }
 $('marketSearch').addEventListener('input',renderMarkets);
 
@@ -517,7 +556,6 @@ async function loadChartCandles(){
     const low=Math.min(...data.map(d=>parseFloat(d.l)));
     const vol=data.reduce((s,d)=>s+parseFloat(d.v),0);
     $('statHigh').textContent=fmt(high); $('statLow').textContent=fmt(low); $('statVol').textContent=vol>=1000?(vol/1000).toFixed(1)+'K':vol.toFixed(0);
-    // build fake trades from candles
     tradesCache[currentCoin]=data.slice(-10).reverse().map((d,i)=>({px:d.c,sz:(Math.random()*100+10).toFixed(2),side:parseFloat(d.c)>parseFloat(d.o)?'buy':'sell',ts:new Date(d.t).toLocaleTimeString()}));
     renderTrades();
   }catch(e){console.error('chart candles error',e);}
@@ -552,8 +590,8 @@ function renderTrades(){
 function updateChartHeader(){
   const p=mids[currentCoin]; if(!p)return;
   $('chartPair').textContent=currentCoin;
-  const prev=mids[currentCoin+'_prev'];
-  const cls=prev&&parseFloat(p)>=parseFloat(prev)?'up':'down';
+  const ch = change24hCache[currentCoin]?.change;
+  const cls = (typeof ch==='number') ? (ch>=0?'up':'down') : '';
   $('chartPrice').textContent=fmt(p); $('chartPrice').className='pair-price '+cls;
 }
 
@@ -643,10 +681,6 @@ if('Notification' in window && Notification.permission==='default')Notification.
 document.querySelectorAll('.nav-item').forEach(item=>{
   item.addEventListener('click',()=>switchTab(item.dataset.view));
 });
-
-/* Save prev prices */
-function savePrev(){for(const[k,v]of Object.entries(mids))mids[k+'_prev']=v;}
-setInterval(savePrev,5000);
 
 /* Init */
 init();
