@@ -1,7 +1,7 @@
 {
   "name": "Hyperliquid Terminal",
   "short_name": "HL Terminal",
-  "description": "Live Hyperliquid perpetuals trading terminal with charts & alerts",
+  "description": "Live Hyperliquid perpetuals & spot trading terminal with charts & alerts",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0c1420",
