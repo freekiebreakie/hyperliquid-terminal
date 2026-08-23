@@ -26,3 +26,4 @@ Simply open `index.html` in any browser — no build step needed.
 ---
 
 Built with vanilla HTML/CSS/JS + [Lightweight Charts](https://tradingview.github.io/lightweight-charts/)
+# Auto-deployed to https://hyperliquid-terminal.netlify.app
