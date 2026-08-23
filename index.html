@@ -10,7 +10,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect fill='%232a82d9' width='192' height='192' rx='32'/%3E%3Ctext x='96' y='120' font-size='96' text-anchor='middle' fill='white'%3E⚡%3C/text%3E%3C/svg%3E">
 <title>Hyperliquid Terminal</title>
-<meta name="version" content="v2">
+<meta name="version" content="v3">
 <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 :root{--bg:#0a1325;--card:#0f1d35;--elevated:#152640;--border:#1a3050;--text:#e8eef5;--muted:#5b7a99;--accent:#2a82d9;--accent2:#3b82f6;--green:#10b981;--red:#ef4444;--safe:#22c55e;}
@@ -304,6 +304,8 @@ let chart, candleSeries, volumeSeries;
 let sparklineCache = {};
 let change24hCache = {}; // {coin: {change, t}}
 let tradesCache = {};
+let spotApiMap = {};     // {displayName: apiName}  e.g. {"XAUM/USDC":"@456"}
+let spotDisplayMap = {}; // {apiName: displayName}  e.g. {"@456":"XAUM/USDC"}
 
 /* ========== HELPERS ========== */
 const $ = id => document.getElementById(id);
@@ -317,6 +319,7 @@ const fmt = p => {
   return n.toFixed(8);
 };
 const pct = (a,b) => ((parseFloat(a)-parseFloat(b))/parseFloat(b)*100);
+function apiName(coin){ return spotApiMap[coin] || coin; }
 function switchTab(view) {
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -359,7 +362,7 @@ async function fetch24hChange(coin, force=false){
   const now = Date.now();
   if(!force && change24hCache[key] && now - change24hCache[key].t < 120000) return change24hCache[key].change;
   try{
-    const data = await hl('candleSnapshot',{req:{coin,interval:'1d',startTime:now-3*24*60*60*1000,endTime:now}});
+    const data = await hl('candleSnapshot',{req:{coin:apiName(coin),interval:'1d',startTime:now-3*24*60*60*1000,endTime:now}});
     if(!Array.isArray(data) || data.length < 2) {
       change24hCache[key] = {change:null, t:now};
       return null;
@@ -377,13 +380,32 @@ async function fetch24hChange(coin, force=false){
 async function init(){
   loadState();
   const [meta, spotMeta] = await Promise.all([hl('meta'), hl('spotMeta')]);
-  coins = meta.universe.map(c=>({name:c.name, marketType:'perp', sz:c.szDecimals||0}));
-  // add canonical spot pairs
-  const spots = (spotMeta.universe||[]).filter(u=>u.isCanonical).map(u=>({name:u.name, marketType:'spot', sz:0}));
-  // merge, avoid duplicate names
-  for(const s of spots){
-    if(!coins.find(c=>c.name===s.name)) coins.push(s);
+  coins = meta.universe.map(c=>({name:c.name, apiName:c.name, marketType:'perp', sz:c.szDecimals||0}));
+  // resolve all spot pairs (canonical + non-canonical)
+  const tokens = (spotMeta.tokens||[]);
+  const idxToToken = {};
+  tokens.forEach(t=> idxToToken[t.index] = t);
+  const spotCoins = [];
+  for(const u of (spotMeta.universe||[])){
+    const isCanon = u.isCanonical;
+    let displayName, apiName;
+    if(isCanon){
+      displayName = u.name;
+      apiName = u.name;
+    } else {
+      const t0 = idxToToken[u.tokens[0]];
+      const t1 = idxToToken[u.tokens[1]];
+      if(!t0 || !t1) continue;
+      displayName = `${t0.name}/${t1.name}`;
+      apiName = u.name; // e.g. "@1", "@456"
+      spotApiMap[displayName] = apiName;
+      spotDisplayMap[apiName] = displayName;
+    }
+    // skip if already exists as perp (unlikely)
+    if(coins.find(c=>c.name===displayName)) continue;
+    spotCoins.push({name:displayName, apiName, marketType:'spot', sz:0});
   }
+  coins = coins.concat(spotCoins);
   $('marketSubtitle').textContent = `${coins.length} markets on Hyperliquid`;
   await refreshMids();
   renderWatchlist();
@@ -395,7 +417,11 @@ async function init(){
 }
 
 async function refreshMids(){
-  mids = await hl('allMids');
+  const raw = await hl('allMids');
+  mids = {};
+  for(const [k,v] of Object.entries(raw)){
+    mids[spotDisplayMap[k] || k] = v;
+  }
   // 24h changes for watchlist
   await Promise.all(watchlist.map(c=>fetch24hChange(c)));
   renderWatchlist();
@@ -410,7 +436,7 @@ async function getSparkline(coin){
   const now = Date.now();
   if(sparklineCache[key] && now - sparklineCache[key].t < 60000) return sparklineCache[key].data;
   try{
-    const data = await hl('candleSnapshot',{req:{coin,interval:'1h',startTime:now-24*60*60*1000,endTime:now}});
+    const data = await hl('candleSnapshot',{req:{coin:apiName(coin),interval:'1h',startTime:now-24*60*60*1000,endTime:now}});
     sparklineCache[key] = {t:now,data};
     return data;
   }catch(e){return null;}
@@ -548,7 +574,7 @@ async function loadChartCandles(){
   try{
     const now=Date.now();
     const hrs = currentTf==='1m'?6:currentTf==='1h'?72:currentTf==='4h'?168:currentTf==='1d'?720:168;
-    const data = await hl('candleSnapshot',{req:{coin:currentCoin,interval:currentTf,startTime:now-hrs*60*60*1000,endTime:now}});
+    const data = await hl('candleSnapshot',{req:{coin:apiName(currentCoin),interval:currentTf,startTime:now-hrs*60*60*1000,endTime:now}});
     if(!Array.isArray(data)||!data.length)return;
     const candles=data.map(d=>({time:d.t/1000,open:parseFloat(d.o),high:parseFloat(d.h),low:parseFloat(d.l),close:parseFloat(d.c)}));
     const volumes=data.map(d=>({time:d.t/1000,value:parseFloat(d.v),color:parseFloat(d.c)>=parseFloat(d.o)?'rgba(16,185,129,0.3)':'rgba(239,68,68,0.3)'}));
@@ -564,7 +590,7 @@ async function loadChartCandles(){
 
 async function loadOrderbook(){
   try{
-    const ob=await hl('l2Book',{coin:currentCoin});
+    const ob=await hl('l2Book',{coin:apiName(currentCoin)});
     if(!ob||!ob.levels)return;
     const bids=ob.levels[0]||[]; const asks=ob.levels[1]||[];
     const maxSz=Math.max(...bids.slice(0,8).map(l=>parseFloat(l.sz)),...asks.slice(0,8).map(l=>parseFloat(l.sz)))||1;

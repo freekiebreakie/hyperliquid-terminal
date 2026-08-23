@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hl-terminal-v2';
+const CACHE_NAME = 'hl-terminal-v3';
 const urlsToCache = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {
