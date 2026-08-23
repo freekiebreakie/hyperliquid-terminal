@@ -10,7 +10,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect fill='%232a82d9' width='192' height='192' rx='32'/%3E%3Ctext x='96' y='120' font-size='96' text-anchor='middle' fill='white'%3E⚡%3C/text%3E%3C/svg%3E">
 <title>Hyperliquid Terminal</title>
-<meta name="version" content="v4">
+<meta name="version" content="v5">
 <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 :root{--bg:#0a1325;--card:#0f1d35;--elevated:#152640;--border:#1a3050;--text:#e8eef5;--muted:#5b7a99;--accent:#2a82d9;--accent2:#3b82f6;--green:#10b981;--red:#ef4444;--safe:#22c55e;}
@@ -341,6 +341,27 @@ function getCategory(coin){ return friendlyMap[coin]?.category || (coin.endsWith
 
 let coinVolumes = {}; // {coinName: dayNtlVlm}
 
+/* HIP-3 synthetic markets on Hyperliquid (discovered via l2Book, not in allMids/meta) */
+const hip3Coins = [
+  {name:'xyz:GOLD', friendly:'GOLD', category:'Commodity', icon:'AU'},
+  {name:'xyz:SILVER', friendly:'SILVER', category:'Commodity', icon:'AG'},
+  {name:'xyz:BRENTOIL', friendly:'BRENTOIL', category:'Commodity', icon:'BR'},
+  {name:'xyz:SP500', friendly:'SP500', category:'Index', icon:'SP'},
+  {name:'xyz:AAPL', friendly:'AAPL', category:'Stock', icon:'AA'},
+  {name:'xyz:TSLA', friendly:'TSLA', category:'Stock', icon:'TS'},
+  {name:'xyz:NVDA', friendly:'NVDA', category:'Stock', icon:'NV'},
+  {name:'xyz:AMD', friendly:'AMD', category:'Stock', icon:'AM'},
+  {name:'xyz:AMZN', friendly:'AMZN', category:'Stock', icon:'AZ'},
+  {name:'xyz:MSFT', friendly:'MSFT', category:'Stock', icon:'MS'},
+  {name:'xyz:META', friendly:'META', category:'Stock', icon:'MT'},
+  {name:'xyz:GOOGL', friendly:'GOOGL', category:'Stock', icon:'GO'},
+  {name:'xyz:COIN', friendly:'COIN', category:'Stock', icon:'CO'},
+  {name:'xyz:EURUSD', friendly:'EURUSD', category:'FX', icon:'EU'},
+  {name:'xyz:GBPUSD', friendly:'GBPUSD', category:'FX', icon:'GB'},
+  {name:'xyz:USDJPY', friendly:'USDJPY', category:'FX', icon:'JP'},
+];
+let hip3Mids = {}; // {coin: midPrice}
+
 /* ========== HELPERS ========== */
 const $ = id => document.getElementById(id);
 const fmt = p => {
@@ -354,12 +375,14 @@ const fmt = p => {
 };
 const pct = (a,b) => ((parseFloat(a)-parseFloat(b))/parseFloat(b)*100);
 function apiName(coin){ return spotApiMap[coin] || coin; }
+function getPrice(coin){ return hip3Mids[coin] || mids[coin]; }
+function isHip3(coin){ return coin.startsWith('xyz:'); }
 function switchTab(view) {
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   $(`view-${view}`).classList.add('active');
   document.querySelector(`.nav-item[data-view="${view}"]`)?.classList.add('active');
-  if(view==='chart'){setTimeout(()=>{initChart();if(chart){const c=$('chart-container');chart.resize(c.clientWidth||window.innerWidth-32,c.clientHeight||360);chart.timeScale().fitContent();}loadChartCandles();loadOrderbook();renderChartAlerts();},80);}
+  if(view==='chart'){setTimeout(()=>{initChart();if(chart){const c=$('chart-container');chart.resize(c.clientWidth||window.innerWidth-32,c.clientHeight||360);chart.timeScale().fitContent();}if(!isHip3(currentCoin))loadChartCandles();else showSynthChartMsg();loadOrderbook();renderChartAlerts();},80);}
   if(view==='markets')renderMarkets();
   if(view==='watchlist')renderWatchlist();
   if(view==='alerts')renderAlertsView();
@@ -446,13 +469,17 @@ async function init(){
     spotCoins.push({name:displayName, apiName, marketType:'spot', sz:0, volume: vol, friendly, category});
   }
   coins = coins.concat(spotCoins);
+  // Add HIP-3 synthetic markets
+  coins = coins.concat(hip3Coins.map(c=>({...c, marketType:'synth', sz:0, volume:0})));
   $('marketSubtitle').textContent = `${coins.length} markets`;
   await refreshMids();
+  await refreshHip3Mids();
   renderWatchlist();
   renderMarkets();
   updateAlertBadge();
   if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
   setInterval(refreshMids,5000);
+  setInterval(refreshHip3Mids,15000);
   setInterval(()=>{if($('view-chart').classList.contains('active'))loadOrderbook();},5000);
 }
 
@@ -466,6 +493,25 @@ async function refreshMids(){
   await Promise.all(watchlist.map(c=>fetch24hChange(c)));
   renderWatchlist();
   renderMarkets();
+  updateChartHeader();
+  checkAlerts();
+}
+
+async function refreshHip3Mids(){
+  // HIP-3 markets are NOT in allMids; poll l2Book for mid prices
+  const promises = hip3Coins.map(async c=>{
+    try{
+      const ob = await hl('l2Book',{coin:c.name});
+      if(ob && ob.levels && ob.levels[0] && ob.levels[0][0] && ob.levels[1] && ob.levels[1][0]){
+        const bid = parseFloat(ob.levels[0][0].px);
+        const ask = parseFloat(ob.levels[1][0].px);
+        hip3Mids[c.name] = (bid+ask)/2;
+      }
+    }catch(e){}
+  });
+  await Promise.all(promises);
+  if($('view-markets').classList.contains('active')) renderMarkets();
+  if($('view-watchlist').classList.contains('active')) renderWatchlist();
   updateChartHeader();
   checkAlerts();
 }
@@ -518,7 +564,7 @@ function renderWatchlist(){
   $('watchlistCount').textContent = `${watchlist.length} coin${watchlist.length!==1?'s':''} tracked`;
   grid.innerHTML = '';
   items.forEach(coin=>{
-    const p = mids[coin]; if(!p)return;
+    const p = getPrice(coin); if(!p)return;
     const ch = change24hCache[coin]?.change;
     const coinObj = coins.find(c=>c.name===coin);
     const display = coinObj ? (coinObj.friendly || coin) : coin;
@@ -527,16 +573,18 @@ function renderWatchlist(){
     const sparkId = `spark_${coin}_${Date.now()}`;
     const changeHtml = (typeof ch==='number') ? `<span class="change ${ch>=0?'up':'down'}">${ch>=0?'+':''}${ch.toFixed(2)}%</span>` : '';
     const priceCls = (typeof ch==='number') ? (ch>=0?'up':'down') : '';
+    const isSynth = coinObj && coinObj.marketType==='synth';
     card.innerHTML = `
       <div class="watch-card-header">
-        <span class="pair">${display}</span>
+        <span class="pair">${display}${isSynth?' <span style="font-size:9px;color:var(--accent)">●</span>':''}</span>
         ${changeHtml}
       </div>
       <div class="price ${priceCls}">${fmt(p)}</div>
       <div class="sparkline-container" id="${sparkId}"></div>`;
     card.onclick = ()=>{currentCoin=coin;switchTab('chart');};
     grid.appendChild(card);
-    renderSparkline(coin, $(sparkId));
+    if(!isSynth) renderSparkline(coin, $(sparkId));
+    else $(sparkId).innerHTML='<div style="height:44px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px">Live price only</div>';
   });
 }
 $('wlSearch').addEventListener('input',renderWatchlist);
@@ -553,6 +601,7 @@ function renderMarkets(){
     return false;
   });
   const featured = new Set(Object.keys(friendlyMap));
+  hip3Coins.forEach(c=>featured.add(c.name));
   items.sort((a,b)=>{
     const aF = featured.has(a.name)?1:0;
     const bF = featured.has(b.name)?1:0;
@@ -561,7 +610,7 @@ function renderMarkets(){
   });
   list.innerHTML = '';
   items.forEach(c=>{
-    const coin=c.name, p=mids[coin];
+    const coin=c.name, p=getPrice(coin);
     const ch = change24hCache[coin]?.change;
     const fav = watchlist.includes(coin);
     const row = document.createElement('div');
@@ -570,15 +619,20 @@ function renderMarkets(){
       ? `<div class="coin-change ${ch>=0?'up':'down'}">${ch>=0?'+':''}${ch.toFixed(2)}%</div>`
       : `<div class="coin-change"></div>`;
     const priceCls = (typeof ch==='number') ? (ch>=0?'up':'down') : '';
-    const displayLabel = c.friendly !== c.name ? c.friendly : c.name;
-    const subLabel = c.friendly !== c.name ? c.name : (c.marketType==='spot'?'Spot':'Perp');
+    const displayLabel = c.friendly || c.name;
+    let subLabel = c.name;
+    if(c.marketType==='spot') subLabel = 'Spot';
+    else if(c.marketType==='perp') subLabel = 'Perp';
+    else if(c.marketType==='synth') subLabel = 'Synth';
+    const badgeColor = c.marketType==='synth' ? 'var(--accent)' : 'var(--muted)';
+    const badgeBg = c.marketType==='synth' ? 'rgba(42,130,217,0.15)' : 'var(--elevated)';
     row.innerHTML=`
       <div class="left">
-        <div class="coin-icon">${(c.friendly||c.name).slice(0,2)}</div>
+        <div class="coin-icon">${(c.icon||c.friendly||c.name).slice(0,2)}</div>
         <div>
           <div style="display:flex;align-items:center;gap:6px;">
             <div class="coin-name">${displayLabel}</div>
-            <span style="font-size:9px;background:var(--elevated);color:var(--muted);padding:1px 5px;border-radius:4px;">${c.category}</span>
+            <span style="font-size:9px;background:${badgeBg};color:${badgeColor};padding:1px 5px;border-radius:4px;">${c.category}</span>
           </div>
           <div class="coin-sub">${subLabel}</div>
         </div>
@@ -642,6 +696,7 @@ async function loadChartCandles(){
     const now=Date.now();
     const hrs = currentTf==='1m'?6:currentTf==='1h'?72:currentTf==='4h'?168:currentTf==='1d'?720:168;
     const data = await hl('candleSnapshot',{req:{coin:apiName(currentCoin),interval:currentTf,startTime:now-hrs*60*60*1000,endTime:now}});
+    const oldOverlay = $('synthOverlay'); if(oldOverlay) oldOverlay.remove();
     if(!Array.isArray(data)||!data.length)return;
     const candles=data.map(d=>({time:d.t/1000,open:parseFloat(d.o),high:parseFloat(d.h),low:parseFloat(d.l),close:parseFloat(d.c)}));
     const volumes=data.map(d=>({time:d.t/1000,value:parseFloat(d.v),color:parseFloat(d.c)>=parseFloat(d.o)?'rgba(16,185,129,0.3)':'rgba(239,68,68,0.3)'}));
@@ -682,13 +737,29 @@ function renderTrades(){
 }
 
 function updateChartHeader(){
-  const p=mids[currentCoin]; if(!p)return;
+  const p=getPrice(currentCoin); if(!p)return;
   const coinObj = coins.find(c=>c.name===currentCoin);
   const display = coinObj ? (coinObj.friendly || currentCoin) : currentCoin;
   $('chartPair').textContent=display;
   const ch = change24hCache[currentCoin]?.change;
   const cls = (typeof ch==='number') ? (ch>=0?'up':'down') : '';
   $('chartPrice').textContent=fmt(p); $('chartPrice').className='pair-price '+cls;
+}
+
+function showSynthChartMsg(){
+  if(!chart) return;
+  candleSeries.setData([]);
+  volumeSeries.setData([]);
+  $('statHigh').textContent='—'; $('statLow').textContent='—'; $('statVol').textContent='—'; $('statSpread').textContent='—';
+  // Add a text overlay
+  const overlay = document.createElement('div');
+  overlay.id='synthOverlay';
+  overlay.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--muted);font-size:14px;';
+  overlay.innerHTML='<div style="font-size:32px;margin-bottom:8px">📊</div>Chart history not available for HIP-3 markets.<br>Order book data is live below.';
+  const container = $('chart-container');
+  const old = $('synthOverlay');
+  if(old) old.remove();
+  container.appendChild(overlay);
 }
 
 /* chart panel tabs */
@@ -761,7 +832,7 @@ let alerted=new Set();
 function checkAlerts(){
   alerts.forEach(a=>{
     if(a.triggered)return;
-    const p=mids[a.coin]; if(!p)return;
+    const p=getPrice(a.coin); if(!p)return;
     const price=parseFloat(p);
     if(Math.abs(price-a.price)/a.price<0.003){
       a.triggered=true;
