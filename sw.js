@@ -1,5 +1,14 @@
-const CACHE_NAME = 'hl-terminal-v5.5.1';
-const urlsToCache = ['/', '/index.html', '/manifest.json'];
+const CACHE_NAME = 'depth-v6.0';
+const urlsToCache = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/assets/logo/depth-mark.svg',
+  '/assets/app-icon/icon-192.png',
+  '/assets/app-icon/icon-512.png',
+  '/assets/app-icon/icon-maskable-512.png',
+  '/assets/app-icon/apple-touch-icon-180.png'
+];
 
 self.addEventListener('install', e => {
   self.skipWaiting();
@@ -18,7 +27,6 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   e.respondWith(
     fetch(e.request).then(r => {
-      // update cache with fresh response
       const clone = r.clone();
       caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
       return r;

@@ -1,16 +1,41 @@
 {
-  "name": "Hyperliquid Terminal",
-  "short_name": "HL Terminal",
-  "description": "Live Hyperliquid perpetuals & spot trading terminal with charts & alerts",
+  "name": "Depth — Hyperliquid Terminal",
+  "short_name": "Depth",
+  "description": "Read-only Hyperliquid terminal: markets, charts, order book and price alerts.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0c1420",
-  "theme_color": "#0c1420",
   "orientation": "portrait",
+  "background_color": "#07080a",
+  "theme_color": "#0a0b0e",
+  "categories": [
+    "finance"
+  ],
   "icons": [
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect fill='%232a82d9' width='192' height='192' rx='32'/%3E%3Ctext x='96' y='120' font-size='96' text-anchor='middle' fill='white'%3E⚡%3C/text%3E%3C/svg%3E",
+      "src": "/assets/app-icon/icon-192.png",
       "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/app-icon/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/app-icon/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/assets/app-icon/icon-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/logo/depth-mark.svg",
+      "sizes": "any",
       "type": "image/svg+xml"
     }
   ]

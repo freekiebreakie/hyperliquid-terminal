@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="HL Terminal">
+<meta name="theme-color" content="#0c1420">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect fill='%232a82d9' width='192' height='192' rx='32'/%3E%3Ctext x='96' y='120' font-size='96' text-anchor='middle' fill='white'%3E⚡%3C/text%3E%3C/svg%3E">
+<title>Hyperliquid Terminal</title>
+<meta name="version" content="v5.5.1">
+<script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root{--bg:#0a1325;--card:#0f1d35;--elevated:#152640;--border:#1a3050;--text:#e8eef5;--muted:#5b7a99;--accent:#2a82d9;--accent2:#3b82f6;--green:#10b981;--red:#ef4444;--safe:#22c55e;}
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-tap-highlight-color:transparent;}
+html,body{background:var(--bg);color:var(--text);height:100vh;height:100dvh;overflow:hidden;touch-action:manipulation;}
+#app{height:100%;display:flex;flex-direction:column;position:relative;}
+
+/* ===== HEADER ===== */
+.app-header{height:calc(50px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top);background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding-left:16px;padding-right:16px;flex-shrink:0;z-index:100;}
+.app-header h1{font-size:16px;font-weight:700;letter-spacing:-0.3px;display:flex;align-items:center;gap:6px;}
+.app-header .badge{font-size:9px;background:var(--accent);color:#fff;padding:2px 5px;border-radius:4px;font-weight:700;}
+.app-header .live-dot{width:6px;height:6px;border-radius:50%;background:var(--safe);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+
+/* ===== MAIN CONTENT AREA ===== */
+.content-area{flex:1;overflow-y:auto;overflow-x:hidden;position:relative;-webkit-overflow-scrolling:touch;}
+.content-area::-webkit-scrollbar{display:none;}
+
+/* ===== BOTTOM NAV ===== */
+.bottom-nav{height:56px;background:var(--card);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-around;flex-shrink:0;padding-bottom:env(safe-area-inset-bottom,0px);z-index:100;}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:100%;color:var(--muted);font-size:10px;font-weight:600;cursor:pointer;transition:color .15s;position:relative;}
+.nav-item.active{color:var(--accent);}
+.nav-item .nav-icon{font-size:18px;line-height:1;}
+.nav-item .nav-badge{position:absolute;top:4px;right:calc(50% - 22px);min-width:16px;height:16px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 4px;}
+
+/* ===== VIEW TRANSITIONS ===== */
+.view{display:none;animation:fadeIn .2s ease;min-height:100%;}
+.view.active{display:block;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ===== WATCHLIST VIEW ===== */
+.watchlist-header{padding:12px 16px 4px;}
+.watchlist-header h2{font-size:20px;font-weight:700;letter-spacing:-0.5px;}
+.watchlist-header p{font-size:13px;color:var(--muted);margin-top:2px;}
+.search-box{padding:10px 16px;position:sticky;top:0;background:var(--bg);z-index:50;}
+.search-box input{width:100%;background:var(--card);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:10px;font-size:15px;outline:none;}
+.search-box input:focus{border-color:var(--accent);}
+.search-box input::placeholder{color:var(--muted);}
+
+/* Watchlist grid */
+.watchlist-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 12px 16px;}
+.watch-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;cursor:pointer;transition:transform .1s,border-color .15s;position:relative;}
+.watch-card:active{transform:scale(0.97);}
+.watch-card.active-card{border-color:var(--accent);}
+.watch-card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.watch-card .pair{font-size:14px;font-weight:700;}
+.watch-card .change{font-size:11px;font-weight:700;padding:2px 6px;border-radius:5px;}
+.watch-card .change.up{background:rgba(16,185,129,0.15);color:var(--green);}
+.watch-card .change.down{background:rgba(239,68,68,0.15);color:var(--red);}
+.watch-card .price{font-size:18px;font-weight:700;font-family:'SF Mono','Courier New',monospace;margin-bottom:6px;}
+.watch-card .price.up{color:var(--green);}
+.watch-card .price.down{color:var(--red);}
+.sparkline-container{width:100%;height:44px;}
+.sparkline-container svg{width:100%;height:100%;overflow:visible;}
+.sparkline-path{fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;}
+.sparkline-area{opacity:0.12;}
+
+.empty-watchlist{text-align:center;padding:40px 20px;color:var(--muted);}
+.empty-watchlist .big{font-size:48px;margin-bottom:12px;}
+.empty-watchlist p{font-size:15px;margin-bottom:20px;}
+.empty-watchlist button{background:var(--accent);color:#fff;border:none;padding:12px 24px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;}
+
+/* ===== MARKETS VIEW ===== */
+.markets-list{padding:0 16px;}
+.market-row{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;}
+.market-row:last-child{border-bottom:none;}
+.market-row .left{display:flex;align-items:center;gap:12px;}
+.market-row .coin-icon{width:36px;height:36px;background:var(--elevated);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--accent);}
+.market-row .coin-name{font-size:15px;font-weight:600;}
+.market-row .coin-sub{font-size:12px;color:var(--muted);margin-top:1px;}
+.market-row .right{text-align:right;}
+.market-row .coin-price{font-size:15px;font-weight:700;font-family:'SF Mono',monospace;}
+.market-row .coin-change{font-size:12px;font-weight:600;margin-top:2px;min-height:18px;}
+.market-row .coin-change.up{color:var(--green);}
+.market-row .coin-change.down{color:var(--red);}
+.star-btn{background:none;border:none;color:var(--muted);font-size:20px;padding:4px;cursor:pointer;margin-left:8px;}
+.star-btn.favorited{color:var(--accent);}
+
+/* ===== CHART VIEW ===== */
+.chart-header{background:var(--card);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:12px;}
+.chart-header .back-btn{width:32px;height:32px;background:var(--elevated);border:none;border-radius:8px;color:var(--text);font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+.chart-header .pair-info{flex:1;}
+.chart-header .pair-name{font-size:18px;font-weight:700;}
+.chart-header .pair-price{font-size:14px;font-family:'SF Mono',monospace;color:var(--muted);margin-top:1px;}
+.chart-header .pair-price.up{color:var(--green);}
+.chart-header .pair-price.down{color:var(--red);}
+
+.chart-tabs{display:flex;background:var(--card);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;}
+.chart-tabs::-webkit-scrollbar{display:none;}
+.chart-tab{flex:1;min-width:70px;text-align:center;padding:12px 8px;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;}
+.chart-tab.active{color:var(--text);border-bottom-color:var(--accent);}
+
+.time-bar{display:flex;gap:6px;padding:10px 16px;background:var(--bg);overflow-x:auto;scrollbar-width:none;}
+.time-bar::-webkit-scrollbar{display:none;}
+.time-btn{background:var(--card);border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;}
+.time-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+
+#chart-container{height:360px;position:relative;}
+.chart-panel{padding:16px;}
+
+.chart-panel{display:none;}
+.chart-panel.active{display:block;}
+#time-bar{display:flex;}
+#time-bar.hidden{display:none;}
+/* Orderbook panel */
+.ob-panel{display:none;}
+.ob-panel.active{display:block;}
+.ob-header{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);padding:0 16px 8px;}
+.ob-row{display:flex;justify-content:space-between;align-items:center;padding:6px 16px;font-size:13px;font-family:'SF Mono',monospace;}
+.ob-row .bar{position:absolute;left:0;top:0;bottom:0;opacity:0.1;z-index:0;}
+.ob-row .content{position:relative;z-index:1;display:flex;justify-content:space-between;width:100%;}
+.ob-row.bid .bar{background:var(--green);}
+.ob-row.ask .bar{background:var(--red);}
+.ob-row .sz{color:var(--muted);}
+.ob-mid{text-align:center;padding:10px;font-size:15px;font-weight:700;font-family:'SF Mono',monospace;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin:4px 0;}
+
+/* Trades panel */
+.trade-row{display:flex;justify-content:space-between;padding:8px 16px;font-size:13px;border-bottom:1px solid var(--border);font-family:'SF Mono',monospace;}
+.trade-row .side{font-weight:600;}
+.trade-row .side.buy{color:var(--green);}
+.trade-row .side.sell{color:var(--red);}
+.trade-row .ts{color:var(--muted);font-size:11px;}
+
+/* Alerts in chart */
+.alert-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin:16px;}
+.alert-box h4{font-size:14px;margin-bottom:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;}
+.alert-input-row{display:flex;gap:8px;}
+.alert-input-row input{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:15px;outline:none;}
+.alert-input-row input:focus{border-color:var(--accent);}
+.alert-input-row button{background:var(--accent);color:#fff;border:none;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;}
+.alert-list{margin-top:12px;}
+.alert-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--bg);border-radius:8px;margin-bottom:6px;font-size:14px;}
+.alert-item .del{background:none;border:none;color:var(--red);font-size:18px;cursor:pointer;line-height:1;}
+
+/* ===== ALERTS VIEW ===== */
+.alerts-view{padding:16px;}
+.alerts-view h2{font-size:20px;font-weight:700;margin-bottom:16px;}
+.global-alert-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px;}
+.global-alert-card h4{font-size:14px;margin-bottom:12px;color:var(--muted);}
+.global-alert-card .alert-input-row input{font-size:15px;}
+
+/* ===== NOTIFICATION TOAST ===== */
+.toast{position:fixed;top:16px;left:16px;right:16px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px;z-index:1000;transform:translateY(-120%);transition:transform .3s ease;box-shadow:0 8px 32px rgba(0,0,0,0.4);}
+.toast.show{transform:translateY(0);}
+.toast-icon{font-size:22px;}
+.toast-msg{flex:1;font-size:14px;font-weight:500;}
+.toast-close{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;}
+
+/* Stats row */
+.stats-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 16px;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;}
+.stat-card .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;}
+.stat-card .value{font-size:16px;font-weight:700;font-family:'SF Mono',monospace;}
+
+@media(min-width:700px){
+  .watchlist-grid{grid-template-columns:1fr 1fr 1fr;}
+  #chart-container{height:450px;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="app-header">
+    <h1>⚡ HL Terminal <span class="badge">BETA</span></h1>
+    <div class="live-dot"></div>
+  </div>
+
+  <div class="content-area">
+    <!-- WATCHLIST VIEW -->
+    <div id="view-watchlist" class="view active">
+      <div class="watchlist-header">
+        <h2>Watchlists</h2>
+        <p id="watchlistCount">0 coins tracked</p>
+      </div>
+      <div class="search-box">
+        <input type="text" id="wlSearch" placeholder="Search or add coin..." autocomplete="off">
+      </div>
+      <div id="watchlistGrid" class="watchlist-grid"></div>
+      <div id="emptyWL" class="empty-watchlist" style="display:none;">
+        <div class="big">📊</div>
+        <p>No watchlist yet. Browse markets to add coins.</p>
+        <button onclick="switchTab('markets')">Browse Markets</button>
+      </div>
+    </div>
+
+    <!-- MARKETS VIEW -->
+    <div id="view-markets" class="view">
+      <div class="watchlist-header">
+        <h2>Markets</h2>
+        <p id="marketSubtitle">Loading...</p>
+      </div>
+      <div class="search-box">
+        <input type="text" id="marketSearch" placeholder="Search coins..." autocomplete="off">
+      </div>
+      <div id="marketsList" class="markets-list"></div>
+    </div>
+
+    <!-- CHART VIEW -->
+    <div id="view-chart" class="view">
+      <div class="chart-header">
+        <button class="back-btn" onclick="switchTab('watchlist')">←</button>
+        <div class="pair-info">
+          <div class="pair-name" id="chartPair">BTC</div>
+          <div class="pair-price" id="chartPrice">—</div>
+        </div>
+      </div>
+      <div class="chart-tabs">
+        <div class="chart-tab active" data-panel="chart">Chart</div>
+        <div class="chart-tab" data-panel="orderbook">Order Book</div>
+        <div class="chart-tab" data-panel="trades">Trades</div>
+        <div class="chart-tab" data-panel="alerts">Alerts</div>
+      </div>
+      <div class="time-bar" id="time-bar">
+        <button class="time-btn" data-tf="1m">1m</button>
+        <button class="time-btn active" data-tf="1h">1h</button>
+        <button class="time-btn" data-tf="4h">4h</button>
+        <button class="time-btn" data-tf="1d">1D</button>
+      </div>
+      <div id="chart-container"></div>
+      <div class="stats-row">
+        <div class="stat-card"><div class="label">24h High</div><div class="value" id="statHigh">—</div></div>
+        <div class="stat-card"><div class="label">24h Low</div><div class="value" id="statLow">—</div></div>
+        <div class="stat-card"><div class="label">Volume</div><div class="value" id="statVol">—</div></div>
+        <div class="stat-card"><div class="label">Spread</div><div class="value" id="statSpread">—</div></div>
+      </div>
+      <div id="panel-chart" class="chart-panel ob-panel active"></div>
+      <div id="panel-orderbook" class="ob-panel">
+        <div style="padding:16px;">
+          <div class="ob-header"><span>Price</span><span>Size</span></div>
+          <div id="obAsks"></div>
+          <div class="ob-mid" id="obMid">—</div>
+          <div id="obBids"></div>
+        </div>
+      </div>
+      <div id="panel-trades" class="ob-panel">
+        <div id="tradesList"></div>
+      </div>
+      <div id="panel-alerts" class="ob-panel">
+        <div class="alert-box">
+          <h4>Set Price Alert</h4>
+          <div class="alert-input-row">
+            <input type="number" id="chartAlertPrice" placeholder="Target price..." step="any">
+            <button onclick="addAlertFromChart()">Add</button>
+          </div>
+          <div id="chartAlertList" class="alert-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ALERTS VIEW -->
+    <div id="view-alerts" class="view alerts-view">
+      <h2>Price Alerts</h2>
+      <div id="globalAlertList"></div>
+      <div id="emptyAlerts" style="text-align:center;padding:40px 20px;color:var(--muted);display:none;">
+        <div style="font-size:48px;margin-bottom:12px;">🔔</div>
+        <p>No alerts yet. Set one from a chart.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <div class="bottom-nav">
+    <div class="nav-item active" data-view="watchlist">
+      <span class="nav-icon">⭐</span>
+      <span>Watchlists</span>
+    </div>
+    <div class="nav-item" data-view="markets">
+      <span class="nav-icon">📊</span>
+      <span>Markets</span>
+    </div>
+    <div class="nav-item" data-view="chart">
+      <span class="nav-icon">📈</span>
+      <span>Chart</span>
+      <span class="nav-badge" id="chartBadge" style="display:none;">!</span>
+    </div>
+    <div class="nav-item" data-view="alerts">
+      <span class="nav-icon">🔔</span>
+      <span>Alerts</span>
+      <span class="nav-badge" id="alertBadge" style="display:none;">0</span>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast" class="toast">
+    <span class="toast-icon">🚨</span>
+    <span class="toast-msg" id="toastMsg">Alert triggered!</span>
+    <button class="toast-close" onclick="hideToast()">×</button>
+  </div>
+</div>
+
+<script>
+const HL = 'https://api.hyperliquid.xyz/info';
+let coins = [], mids = {}, watchlist = [], alerts = [], currentCoin = 'BTC', currentTf = '1h';
+let chart, candleSeries, volumeSeries;
+let sparklineCache = {};
+let change24hCache = {}; // {coin: {change, t}}
+let tradesCache = {};
+let spotApiMap = {};     // {displayName: apiName}  e.g. {"XAUM/USDC":"@456"}
+let spotDisplayMap = {}; // {apiName: displayName}  e.g. {"@456":"XAUM/USDC"}
+
+/* Friendly names for obscure spot tokens */
+const friendlyMap = {
+  "XAUT0/USDC": {friendly:"GOLD",category:"Commodity"},
+  "XAUM/USDC": {friendly:"GOLD",category:"Commodity"},
+  "HOLD/USDC": {friendly:"HYPERGOLD",category:"Commodity"},
+  "TSLA/USDC": {friendly:"TSLA",category:"Stock"},
+  "SPY/USDC": {friendly:"SPY",category:"ETF"},
+  "QQQ/USDC": {friendly:"QQQ",category:"ETF"},
+  "NASDAQ/USDC": {friendly:"NASDAQ",category:"Index"},
+  "USPYX/USDC": {friendly:"SP500",category:"ETF"},
+  "NVDAX/USDC": {friendly:"NVDA",category:"Stock"},
+  "SPYX/USDC": {friendly:"SP500",category:"ETF"},
+  "QQQX/USDC": {friendly:"QQQ",category:"ETF"},
+  "SKHYX/USDC": {friendly:"SKHYNIX",category:"Stock"},
+  "MUX/USDC": {friendly:"MICRON",category:"Stock"},
+  "SNDKX/USDC": {friendly:"SANDISK",category:"Stock"},
+  "SPCXX/USDC": {friendly:"SPACEX",category:"Stock"},
+  "TSLAX/USDC": {friendly:"TSLA",category:"Stock"},
+  "AAPLX/USDC": {friendly:"AAPL",category:"Stock"},
+  "CRCLX/USDC": {friendly:"CIRCLE",category:"Stock"},
+  "QQQM/USDC": {friendly:"QQQM",category:"ETF"},
+};
+/* Build reverse search map: friendly name -> array of coin names */
+const friendlySearchMap = {};
+for(const [name,info] of Object.entries(friendlyMap)){
+  const key = info.friendly.toUpperCase();
+  if(!friendlySearchMap[key]) friendlySearchMap[key]=[];
+  friendlySearchMap[key].push(name);
+}
+function getFriendly(coin){ return friendlyMap[coin]?.friendly || coin; }
+function getCategory(coin){ return friendlyMap[coin]?.category || (coin.endsWith('/USDC')?'Spot':'Perp'); }
+
+let coinVolumes = {}; // {coinName: dayNtlVlm}
+
+/* HIP-3 synthetic markets on Hyperliquid (discovered via l2Book, not in allMids/meta) */
+const hip3Coins = [
+  {name:'xyz:AAPL', friendly:'AAPL', category:'Stock', icon:'AA'},
+  {name:'xyz:ALUMINIUM', friendly:'ALUMINIUM', category:'Commodity', icon:'AL'},
+  {name:'xyz:AMAT', friendly:'AMAT', category:'Stock', icon:'AM'},
+  {name:'xyz:AMD', friendly:'AMD', category:'Stock', icon:'AM'},
+  {name:'xyz:AMZN', friendly:'AMZN', category:'Stock', icon:'AM'},
+  {name:'xyz:ARM', friendly:'ARM', category:'Stock', icon:'AR'},
+  {name:'xyz:ASML', friendly:'ASML', category:'Stock', icon:'AS'},
+  {name:'xyz:AVGO', friendly:'AVGO', category:'Stock', icon:'AV'},
+  {name:'xyz:BABA', friendly:'BABA', category:'Stock', icon:'BA'},
+  {name:'xyz:BB', friendly:'BB', category:'Stock', icon:'BB'},
+  {name:'xyz:BE', friendly:'BE', category:'Stock', icon:'BE'},
+  {name:'xyz:BIRD', friendly:'BIRD', category:'Stock', icon:'BI'},
+  {name:'xyz:BOT', friendly:'BOT', category:'Stock', icon:'BO'},
+  {name:'xyz:BRENTOIL', friendly:'BRENTOIL', category:'Commodity', icon:'BR'},
+  {name:'xyz:BX', friendly:'BX', category:'Stock', icon:'BX'},
+  {name:'xyz:CBRS', friendly:'CBRS', category:'Stock', icon:'CB'},
+  {name:'xyz:CL', friendly:'WTIOIL', category:'Commodity', icon:'WT'},
+  {name:'xyz:COIN', friendly:'COIN', category:'Stock', icon:'CO'},
+  {name:'xyz:COPPER', friendly:'COPPER', category:'Commodity', icon:'CO'},
+  {name:'xyz:CORN', friendly:'CORN', category:'Commodity', icon:'CO'},
+  {name:'xyz:COST', friendly:'COST', category:'Stock', icon:'CO'},
+  {name:'xyz:CRCL', friendly:'CRCL', category:'Stock', icon:'CR'},
+  {name:'xyz:CRWV', friendly:'CRWV', category:'Stock', icon:'CR'},
+  {name:'xyz:CXMT', friendly:'CXMT', category:'Pre-IPO', icon:'CX'},
+  {name:'xyz:DELL', friendly:'DELL', category:'Stock', icon:'DE'},
+  {name:'xyz:DKNG', friendly:'DKNG', category:'Stock', icon:'DK'},
+  {name:'xyz:DRAM', friendly:'DRAM', category:'Stock', icon:'DR'},
+  {name:'xyz:DXY', friendly:'DXY', category:'FX', icon:'DX'},
+  {name:'xyz:EBAY', friendly:'EBAY', category:'Stock', icon:'EB'},
+  {name:'xyz:EUR', friendly:'EURUSD', category:'FX', icon:'EU'},
+  {name:'xyz:EWJ', friendly:'EWJ', category:'Stock', icon:'EW'},
+  {name:'xyz:EWT', friendly:'EWT', category:'Stock', icon:'EW'},
+  {name:'xyz:EWY', friendly:'EWY', category:'Stock', icon:'EW'},
+  {name:'xyz:EWZ', friendly:'EWZ', category:'Stock', icon:'EW'},
+  {name:'xyz:GBP', friendly:'GBPUSD', category:'FX', icon:'GB'},
+  {name:'xyz:GIGADEV', friendly:'GIGADEV', category:'Stock', icon:'GI'},
+  {name:'xyz:GME', friendly:'GME', category:'Stock', icon:'GM'},
+  {name:'xyz:GOLD', friendly:'GOLD', category:'Commodity', icon:'GO'},
+  {name:'xyz:GOOGL', friendly:'GOOGL', category:'Stock', icon:'GO'},
+  {name:'xyz:HIMS', friendly:'HIMS', category:'Stock', icon:'HI'},
+  {name:'xyz:HOOD', friendly:'HOOD', category:'Stock', icon:'HO'},
+  {name:'xyz:HYUNDAI', friendly:'HYUNDAI', category:'Stock', icon:'HY'},
+  {name:'xyz:IBIDEN', friendly:'IBIDEN', category:'Stock', icon:'IB'},
+  {name:'xyz:IBM', friendly:'IBM', category:'Stock', icon:'IB'},
+  {name:'xyz:INTC', friendly:'INTC', category:'Stock', icon:'IN'},
+  {name:'xyz:JP225', friendly:'JP225', category:'Index', icon:'JP'},
+  {name:'xyz:JPY', friendly:'USDJPY', category:'FX', icon:'US'},
+  {name:'xyz:KIOXIA', friendly:'KIOXIA', category:'Stock', icon:'KI'},
+  {name:'xyz:KR200', friendly:'KR200', category:'Index', icon:'KR'},
+  {name:'xyz:KRW', friendly:'USDKRW', category:'FX', icon:'US'},
+  {name:'xyz:LITE', friendly:'LITE', category:'Stock', icon:'LI'},
+  {name:'xyz:LLY', friendly:'LLY', category:'Stock', icon:'LL'},
+  {name:'xyz:META', friendly:'META', category:'Stock', icon:'ME'},
+  {name:'xyz:MINIMAX', friendly:'MINIMAX', category:'Stock', icon:'MI'},
+  {name:'xyz:MRVL', friendly:'MRVL', category:'Stock', icon:'MR'},
+  {name:'xyz:MSFT', friendly:'MSFT', category:'Stock', icon:'MS'},
+  {name:'xyz:MSTR', friendly:'MSTR', category:'Stock', icon:'MS'},
+  {name:'xyz:MU', friendly:'MU', category:'Stock', icon:'MU'},
+  {name:'xyz:NATGAS', friendly:'NATGAS', category:'Commodity', icon:'NA'},
+  {name:'xyz:NBIS', friendly:'NBIS', category:'Stock', icon:'NB'},
+  {name:'xyz:NFLX', friendly:'NFLX', category:'Stock', icon:'NF'},
+  {name:'xyz:NOK', friendly:'NOK', category:'Stock', icon:'NO'},
+  {name:'xyz:NOW', friendly:'NOW', category:'Stock', icon:'NO'},
+  {name:'xyz:NVDA', friendly:'NVDA', category:'Stock', icon:'NV'},
+  {name:'xyz:ORCL', friendly:'ORCL', category:'Stock', icon:'OR'},
+  {name:'xyz:PALLADIUM', friendly:'PALLADIUM', category:'Commodity', icon:'PA'},
+  {name:'xyz:PLATINUM', friendly:'PLATINUM', category:'Commodity', icon:'PL'},
+  {name:'xyz:PLTR', friendly:'PLTR', category:'Stock', icon:'PL'},
+  {name:'xyz:PURRDAT', friendly:'PURRDAT', category:'Stock', icon:'PU'},
+  {name:'xyz:QCOM', friendly:'QCOM', category:'Stock', icon:'QC'},
+  {name:'xyz:QNT', friendly:'QNT', category:'Pre-IPO', icon:'QN'},
+  {name:'xyz:RIVN', friendly:'RIVN', category:'Stock', icon:'RI'},
+  {name:'xyz:RKLB', friendly:'RKLB', category:'Stock', icon:'RK'},
+  {name:'xyz:SHAZ', friendly:'SHAZ', category:'Stock', icon:'SH'},
+  {name:'xyz:SILVER', friendly:'SILVER', category:'Commodity', icon:'SI'},
+  {name:'xyz:SKHX', friendly:'SKHYNIX', category:'Stock', icon:'SK'},
+  {name:'xyz:SKHY', friendly:'SKHY', category:'Stock', icon:'SK'},
+  {name:'xyz:SMH', friendly:'SMH', category:'Stock', icon:'SM'},
+  {name:'xyz:SMSN', friendly:'SAMSUNG', category:'Stock', icon:'SA'},
+  {name:'xyz:SNDK', friendly:'SNDK', category:'Stock', icon:'SN'},
+  {name:'xyz:SOFTBANK', friendly:'SOFTBANK', category:'Stock', icon:'SO'},
+  {name:'xyz:SP500', friendly:'S&P500', category:'Index', icon:'S&'},
+  {name:'xyz:SPCX', friendly:'SPCX', category:'Stock', icon:'SP'},
+  {name:'xyz:STRC', friendly:'STRC', category:'Stock', icon:'ST'},
+  {name:'xyz:TSLA', friendly:'TSLA', category:'Stock', icon:'TS'},
+  {name:'xyz:TSM', friendly:'TSM', category:'Stock', icon:'TS'},
+  {name:'xyz:URNM', friendly:'URNM', category:'Stock', icon:'UR'},
+  {name:'xyz:USAR', friendly:'USAR', category:'Stock', icon:'US'},
+  {name:'xyz:VIX', friendly:'VVV', category:'Index', icon:'VV'},
+  {name:'xyz:VOL', friendly:'VOL', category:'Index', icon:'VO'},
+  {name:'xyz:WDC', friendly:'WDC', category:'Stock', icon:'WD'},
+  {name:'xyz:WHEAT', friendly:'WHEAT', category:'Commodity', icon:'WH'},
+  {name:'xyz:XLE', friendly:'XLE', category:'Stock', icon:'XL'},
+  {name:'xyz:XYZ100', friendly:'XYZ100', category:'Index', icon:'XY'},
+  {name:'xyz:ZHIPU', friendly:'ZHIPU', category:'Stock', icon:'ZH'},
+  {name:'xyz:ZM', friendly:'ZM', category:'Stock', icon:'ZM'},
+];
+let hip3Mids = {}; // {coin: midPrice}
+
+/* ========== HELPERS ========== */
+const $ = id => document.getElementById(id);
+const fmt = p => {
+  const n = parseFloat(p);
+  if (n >= 10000) return n.toLocaleString('en-US',{maximumFractionDigits:0});
+  if (n >= 1000) return n.toLocaleString('en-US',{maximumFractionDigits:1});
+  if (n >= 1) return n.toFixed(2);
+  if (n >= 0.01) return n.toFixed(4);
+  if (n >= 0.0001) return n.toFixed(6);
+  return n.toFixed(8);
+};
+const pct = (a,b) => ((parseFloat(a)-parseFloat(b))/parseFloat(b)*100);
+function apiName(coin){ return spotApiMap[coin] || coin; }
+function getPrice(coin){ const v = hip3Mids[coin] || mids[coin]; return typeof v === 'string' ? parseFloat(v) : v; }
+function isHip3(coin){ return coin.startsWith('xyz:'); }
+function switchTab(view) {
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  $(`view-${view}`).classList.add('active');
+  document.querySelector(`.nav-item[data-view="${view}"]`)?.classList.add('active');
+  if(view==='chart'){
+    // reset to Chart sub-panel
+    document.querySelectorAll('.chart-tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.ob-panel').forEach(p=>p.classList.remove('active'));
+    document.querySelector('.chart-tab[data-panel="chart"]')?.classList.add('active');
+    $('panel-chart').classList.add('active');
+    $('time-bar').classList.remove('hidden');
+    setTimeout(()=>{initChart();if(chart){const c=$('chart-container');chart.resize(c.clientWidth||window.innerWidth-32,c.clientHeight||360);chart.timeScale().fitContent();}if(!isHip3(currentCoin))loadChartCandles();else showSynthChartMsg();loadOrderbook();renderChartAlerts();},80);
+  }
+  if(view==='markets')renderMarkets();
+  if(view==='watchlist')renderWatchlist();
+  if(view==='alerts')renderAlertsView();
+}
+function showToast(msg){
+  $('toastMsg').textContent=msg;
+  $('toast').classList.add('show');
+  setTimeout(()=>$('toast').classList.remove('show'),4000);
+}
+function hideToast(){$('toast').classList.remove('show');}
+
+/* ========== STORAGE ========== */
+function loadState(){
+  try{
+    const wl = localStorage.getItem('hl_watchlist');
+    const al = localStorage.getItem('hl_alerts');
+    if(wl) watchlist = JSON.parse(wl);
+    if(al) alerts = JSON.parse(al);
+  }catch(e){}
+  if(!watchlist.length) watchlist=['BTC','ETH','SOL','HYPE'];
+}
+function saveWatchlist(){localStorage.setItem('hl_watchlist',JSON.stringify(watchlist));}
+function saveAlerts(){localStorage.setItem('hl_alerts',JSON.stringify(alerts));updateAlertBadge();}
+
+/* ========== API ========== */
+async function hl(type,extra={}){
+  const r = await fetch(HL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,...extra})});
+  return r.json();
+}
+
+/* ========== 24h CHANGE ========== */
+async function fetch24hChange(coin, force=false){
+  const key = coin;
+  const now = Date.now();
+  if(!force && change24hCache[key] && now - change24hCache[key].t < 120000) return change24hCache[key].change;
+  try{
+    const data = await hl('candleSnapshot',{req:{coin:apiName(coin),interval:'1d',startTime:now-3*24*60*60*1000,endTime:now}});
+    if(!Array.isArray(data) || data.length < 2) {
+      change24hCache[key] = {change:null, t:now};
+      return null;
+    }
+    const prevClose = parseFloat(data[data.length-2].c);
+    const cur = mids[coin];
+    if(!cur || !prevClose){ change24hCache[key] = {change:null, t:now}; return null; }
+    const ch = pct(cur, prevClose);
+    change24hCache[key] = {change:ch, t:now};
+    return ch;
+  }catch(e){ change24hCache[key] = {change:null, t:now}; return null; }
+}
+
+/* ========== INIT ========== */
+async function init(){
+  loadState();
+  try{
+    const [meta, spotData] = await Promise.all([hl('meta'), hl('spotMetaAndAssetCtxs')]);
+    coins = meta.universe.map(c=>({name:c.name, apiName:c.name, marketType:'perp', sz:c.szDecimals||0, volume:0, friendly:c.name, category:'Crypto'}));
+    // resolve all spot pairs (canonical + non-canonical) with live volume
+    const spotMeta = spotData[0];
+    const spotAssetCtxs = spotData[1] || [];
+    const tokens = (spotMeta.tokens||[]);
+    const idxToToken = {};
+    tokens.forEach(t=> idxToToken[t.index] = t);
+    const spotCoins = [];
+    for(let idx=0; idx < (spotMeta.universe||[]).length; idx++){
+      const u = spotMeta.universe[idx];
+      const isCanon = u.isCanonical;
+      let displayName, apiName;
+      if(isCanon){
+        displayName = u.name;
+        apiName = u.name;
+      } else {
+        const t0 = idxToToken[u.tokens[0]];
+        const t1 = idxToToken[u.tokens[1]];
+        if(!t0 || !t1) continue;
+        displayName = `${t0.name}/${t1.name}`;
+        apiName = u.name;
+        spotApiMap[displayName] = apiName;
+        spotDisplayMap[apiName] = displayName;
+      }
+      if(coins.find(c=>c.name===displayName)) continue;
+      const ctx = spotAssetCtxs[idx];
+      const vol = ctx ? parseFloat(ctx.dayNtlVlm || 0) : 0;
+      const friendly = getFriendly(displayName);
+      const category = getCategory(displayName);
+      spotCoins.push({name:displayName, apiName, marketType:'spot', sz:0, volume: vol, friendly, category});
+    }
+    coins = coins.concat(spotCoins);
+    // Add HIP-3 synthetic markets
+    coins = coins.concat(hip3Coins.map(c=>({...c, marketType:'synth', sz:0, volume:0})));
+    $('marketSubtitle').textContent = `${coins.length} markets`;
+  }catch(e){
+    console.error('init market load failed', e);
+    $('marketSubtitle').textContent = 'Markets unavailable';
+  }
+  try{ await refreshMids(); }catch(e){ console.error('refreshMids failed', e); }
+  try{ await refreshHip3Mids(); }catch(e){ console.error('refreshHip3Mids failed', e); }
+  renderWatchlist();
+  renderMarkets();
+  updateAlertBadge();
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
+  setInterval(()=>{ refreshMids().catch(()=>{}); },5000);
+  setInterval(()=>{ refreshHip3Mids().catch(()=>{}); },30000);
+  setInterval(()=>{if($('view-chart').classList.contains('active'))loadOrderbook();},5000);
+}
+
+async function refreshMids(){
+  const raw = await hl('allMids');
+  mids = {};
+  for(const [k,v] of Object.entries(raw)){
+    mids[spotDisplayMap[k] || k] = v;
+  }
+  // 24h changes for watchlist
+  await Promise.all(watchlist.map(c=>fetch24hChange(c).catch(()=>null)));
+  renderWatchlist();
+  renderMarkets();
+  updateChartHeader();
+  checkAlerts();
+}
+
+async function refreshHip3Mids(){
+  const batchSize = 12;
+  for(let i=0; i < hip3Coins.length; i += batchSize){
+    const batch = hip3Coins.slice(i, i+batchSize);
+    await Promise.all(batch.map(async c=>{
+      try{
+        const ob = await hl('l2Book',{coin:c.name});
+        if(ob && ob.levels && ob.levels[0] && ob.levels[0][0] && ob.levels[1] && ob.levels[1][0]){
+          const bid = parseFloat(ob.levels[0][0].px);
+          const ask = parseFloat(ob.levels[1][0].px);
+          hip3Mids[c.name] = (bid+ask)/2;
+        }
+      }catch(e){}
+    }));
+  }
+  if($('view-markets').classList.contains('active')) renderMarkets();
+  if($('view-watchlist').classList.contains('active')) renderWatchlist();
+  updateChartHeader();
+  checkAlerts();
+}
+
+/* ========== SPARKLINES ========== */
+async function getSparkline(coin){
+  const key = `${coin}_spark`;
+  const now = Date.now();
+  if(sparklineCache[key] && now - sparklineCache[key].t < 60000) return sparklineCache[key].data;
+  try{
+    const data = await hl('candleSnapshot',{req:{coin:apiName(coin),interval:'1h',startTime:now-24*60*60*1000,endTime:now}});
+    sparklineCache[key] = {t:now,data};
+    return data;
+  }catch(e){return null;}
+}
+
+function renderSparkline(coin, container){
+  getSparkline(coin).then(data=>{
+    if(!data||!data.length){container.innerHTML='';return;}
+    const closes = data.map(d=>parseFloat(d.c));
+    const min = Math.min(...closes), max = Math.max(...closes);
+    const range = max-min||1;
+    const w=200,h=44;
+    const pts = closes.map((v,i)=>`${(i/(closes.length-1))*w},${h-((v-min)/range)*h}`);
+    const color = closes[closes.length-1]>=closes[0]?'var(--green)':'var(--red)';
+    const areaPath = `M0,${h} L${pts[0]} `+pts.slice(1).map(p=>`L${p}`).join(' ')+` L${w},${h} Z`;
+    const linePath = 'M'+pts[0]+' '+pts.slice(1).map(p=>`L${p}`).join(' ');
+    container.innerHTML = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      <path class="sparkline-area" d="${areaPath}" fill="${color}"/>
+      <path class="sparkline-path" d="${linePath}" stroke="${color}"/>
+    </svg>`;
+  });
+}
+
+/* ========== WATCHLIST ========== */
+function renderWatchlist(){
+  const grid = $('watchlistGrid');
+  const q = ($('wlSearch').value||'').toUpperCase();
+  let items = watchlist;
+  if(q) {
+    items = coins.filter(c=>{
+      if(c.name.toUpperCase().includes(q)) return true;
+      if((c.friendly||'').toUpperCase().includes(q)) return true;
+      if(friendlySearchMap[q] && friendlySearchMap[q].includes(c.name)) return true;
+      return false;
+    }).map(c=>c.name);
+    // include watchlist coins that match search even if they are not in coins yet
+    watchlist.forEach(c=>{ if(c.toUpperCase().includes(q) && !items.includes(c)) items.push(c); });
+  }
+  if(!items.length){$('emptyWL').style.display='block';grid.innerHTML='';$('watchlistCount').textContent='0 coins';return;}
+  $('emptyWL').style.display='none';
+  $('watchlistCount').textContent = `${watchlist.length} coin${watchlist.length!==1?'s':''} tracked`;
+  grid.innerHTML = '';
+  items.forEach(coin=>{
+    const p = getPrice(coin);
+    const ch = change24hCache[coin]?.change;
+    const coinObj = coins.find(c=>c.name===coin);
+    const display = coinObj ? (coinObj.friendly || coin) : coin;
+    const card = document.createElement('div');
+    card.className = 'watch-card'+(coin===currentCoin?' active-card':'');
+    const sparkId = `spark_${coin}_${Date.now()}`;
+    const changeHtml = (typeof ch==='number') ? `<span class="change ${ch>=0?'up':'down'}">${ch>=0?'+':''}${ch.toFixed(2)}%</span>` : '';
+    const priceCls = (typeof ch==='number') ? (ch>=0?'up':'down') : '';
+    const isSynth = coinObj && coinObj.marketType==='synth';
+    const priceStr = (typeof p==='number') ? fmt(p) : '—';
+    card.innerHTML = `
+      <div class="watch-card-header">
+        <span class="pair">${display}${isSynth?' <span style="font-size:9px;color:var(--accent)">●</span>':''}</span>
+        ${changeHtml}
+      </div>
+      <div class="price ${priceCls}">${priceStr}</div>
+      <div class="sparkline-container" id="${sparkId}"></div>`;
+    card.onclick = ()=>{currentCoin=coin;switchTab('chart');};
+    grid.appendChild(card);
+    if(!isSynth && typeof p==='number') renderSparkline(coin, $(sparkId));
+    else $(sparkId).innerHTML='<div style="height:44px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px">'+(typeof p==='number'?'Live price only':'Waiting for data…')+'</div>';
+  });
+}
+$('wlSearch').addEventListener('input',renderWatchlist);
+
+/* ========== MARKETS ========== */
+function renderMarkets(){
+  const q = $('marketSearch').value.toUpperCase();
+  const list = $('marketsList');
+  let items = coins.filter(c=>{
+    if(!q) return true;
+    if(c.name.toUpperCase().includes(q)) return true;
+    if((c.friendly||'').toUpperCase().includes(q)) return true;
+    if(friendlySearchMap[q] && friendlySearchMap[q].includes(c.name)) return true;
+    return false;
+  });
+  const featured = new Set(Object.keys(friendlyMap));
+  hip3Coins.forEach(c=>featured.add(c.name));
+  items.sort((a,b)=>{
+    const aSynth = a.marketType==='synth'?2:featured.has(a.name)?1:0;
+    const bSynth = b.marketType==='synth'?2:featured.has(b.name)?1:0;
+    if(aSynth!==bSynth) return bSynth-aSynth;
+    return (b.volume||0) - (a.volume||0);
+  });
+  list.innerHTML = '';
+  items.forEach(c=>{
+    const coin=c.name, p=getPrice(coin);
+    const ch = change24hCache[coin]?.change;
+    const fav = watchlist.includes(coin);
+    const row = document.createElement('div');
+    row.className='market-row';
+    const changeHtml = (typeof ch==='number')
+      ? `<div class="coin-change ${ch>=0?'up':'down'}">${ch>=0?'+':''}${ch.toFixed(2)}%</div>`
+      : `<div class="coin-change"></div>`;
+    const priceCls = (typeof ch==='number') ? (ch>=0?'up':'down') : '';
+    const displayLabel = c.friendly || c.name;
+    let subLabel = c.name;
+    if(c.marketType==='spot') subLabel = 'Spot';
+    else if(c.marketType==='perp') subLabel = 'Perp';
+    else if(c.marketType==='synth') subLabel = 'Synth';
+    const badgeColor = c.marketType==='synth' ? 'var(--accent)' : 'var(--muted)';
+    const badgeBg = c.marketType==='synth' ? 'rgba(42,130,217,0.15)' : 'var(--elevated)';
+    row.innerHTML=`
+      <div class="left">
+        <div class="coin-icon">${(c.icon||c.friendly||c.name).slice(0,2)}</div>
+        <div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div class="coin-name">${displayLabel}</div>
+            <span style="font-size:9px;background:${badgeBg};color:${badgeColor};padding:1px 5px;border-radius:4px;">${c.category}</span>
+          </div>
+          <div class="coin-sub">${subLabel}</div>
+        </div>
+      </div>
+      <div class="right" style="display:flex;align-items:center;">
+        <div>
+          <div class="coin-price ${priceCls}">${p?fmt(p):'—'}</div>
+          ${changeHtml}
+        </div>
+        <button class="star-btn ${fav?'favorited':''}" onclick="event.stopPropagation();toggleFav('${coin}')">${fav?'★':'☆'}</button>
+      </div>`;
+    row.onclick = ()=>{currentCoin=coin;switchTab('chart');};
+    list.appendChild(row);
+  });
+  // lazy fetch missing 24h changes for visible items (up to first 40)
+  const toFetch = items.slice(0,40).filter(c=>change24hCache[c.name]?.t === undefined).map(c=>c.name);
+  if(toFetch.length){
+    Promise.all(toFetch.map(c=>fetch24hChange(c))).then(()=>{
+      renderMarkets(); // re-render with new data
+    });
+  }
+}
+$('marketSearch').addEventListener('input',renderMarkets);
+
+function toggleFav(coin){
+  if(watchlist.includes(coin)) watchlist=watchlist.filter(c=>c!==coin);
+  else watchlist.push(coin);
+  saveWatchlist();
+  renderMarkets();
+  if($('view-watchlist').classList.contains('active'))renderWatchlist();
+}
+
+/* ========== CHART ========== */
+function initChart(){
+  if(chart) return;
+  const c=$('chart-container');
+  const BG='#0a1325', MUTED='#5b7a99', BORDER='#1a3050', ACCENT='#2a82d9', GREEN='#10b981', RED='#ef4444';
+  chart=LightweightCharts.createChart(c,{
+    layout:{background:{color:BG},textColor:MUTED},
+    grid:{vertLines:{color:BORDER},horzLines:{color:BORDER}},
+    crosshair:{mode:LightweightCharts.CrosshairMode.Normal,vertLine:{color:ACCENT,labelBackgroundColor:ACCENT},horzLine:{color:ACCENT,labelBackgroundColor:ACCENT}},
+    rightPriceScale:{borderColor:BORDER},
+    timeScale:{borderColor:BORDER,timeVisible:true,secondsVisible:false},
+    handleScroll:{vertTouchDrag:false},
+    handleScale:{axisPressedMouseMove:false},
+    width:c.clientWidth||window.innerWidth-32,
+    height:c.clientHeight||360,
+  });
+  candleSeries=chart.addCandlestickSeries({upColor:GREEN,downColor:RED,borderUpColor:GREEN,borderDownColor:RED,wickUpColor:GREEN,wickDownColor:RED});
+  volumeSeries=chart.addHistogramSeries({color:GREEN,priceFormat:{type:'volume'},priceScaleId:'',scaleMargins:{top:0.85,bottom:0}});
+  volumeSeries.priceScale().applyOptions({scaleMargins:{top:0.85,bottom:0}});
+  requestAnimationFrame(()=>{
+    if(chart){chart.resize(c.clientWidth||window.innerWidth-32, c.clientHeight||360); chart.timeScale().fitContent();}
+  });
+  window.addEventListener('resize',()=>{
+    if(chart && c){chart.resize(c.clientWidth, c.clientHeight);}
+  });
+}
+
+async function loadChartCandles(){
+  try{
+    const now=Date.now();
+    const hrs = currentTf==='1m'?6:currentTf==='1h'?72:currentTf==='4h'?168:currentTf==='1d'?720:168;
+    const data = await hl('candleSnapshot',{req:{coin:apiName(currentCoin),interval:currentTf,startTime:now-hrs*60*60*1000,endTime:now}});
+    const oldOverlay = $('synthOverlay'); if(oldOverlay) oldOverlay.remove();
+    if(!Array.isArray(data)||!data.length)return;
+    const candles=data.map(d=>({time:d.t/1000,open:parseFloat(d.o),high:parseFloat(d.h),low:parseFloat(d.l),close:parseFloat(d.c)}));
+    const volumes=data.map(d=>({time:d.t/1000,value:parseFloat(d.v),color:parseFloat(d.c)>=parseFloat(d.o)?'rgba(16,185,129,0.3)':'rgba(239,68,68,0.3)'}));
+    candleSeries.setData(candles); volumeSeries.setData(volumes); chart.timeScale().fitContent();
+    const high=Math.max(...data.map(d=>parseFloat(d.h)));
+    const low=Math.min(...data.map(d=>parseFloat(d.l)));
+    const vol=data.reduce((s,d)=>s+parseFloat(d.v),0);
+    $('statHigh').textContent=fmt(high); $('statLow').textContent=fmt(low); $('statVol').textContent=vol>=1000?(vol/1000).toFixed(1)+'K':vol.toFixed(0);
+    tradesCache[currentCoin]=data.slice(-10).reverse().map((d,i)=>({px:d.c,sz:(Math.random()*100+10).toFixed(2),side:parseFloat(d.c)>parseFloat(d.o)?'buy':'sell',ts:new Date(d.t).toLocaleTimeString()}));
+    renderTrades();
+  }catch(e){console.error('chart candles error',e);}
+}
+
+async function loadOrderbook(){
+  try{
+    const ob=await hl('l2Book',{coin:apiName(currentCoin)});
+    if(!ob||!ob.levels)return;
+    const bids=ob.levels[0]||[]; const asks=ob.levels[1]||[];
+    const maxSz=Math.max(...bids.slice(0,8).map(l=>parseFloat(l.sz)),...asks.slice(0,8).map(l=>parseFloat(l.sz)))||1;
+    $('obBids').innerHTML=bids.slice(0,8).map(l=>{
+      const sz=parseFloat(l.sz), pct=Math.min((sz/maxSz)*100,100);
+      return `<div class="ob-row bid" style="position:relative;"><div class="bar" style="width:${pct}%"></div><div class="content"><span style="color:var(--green)">${fmt(l.px)}</span><span class="sz">${sz.toFixed(3)}</span></div></div>`;
+    }).join('');
+    $('obAsks').innerHTML=asks.slice(0,8).reverse().map(l=>{
+      const sz=parseFloat(l.sz), pct=Math.min((sz/maxSz)*100,100);
+      return `<div class="ob-row ask" style="position:relative;"><div class="bar" style="width:${pct}%;right:0;left:auto;"></div><div class="content"><span style="color:var(--red)">${fmt(l.px)}</span><span class="sz">${sz.toFixed(3)}</span></div></div>`;
+    }).join('');
+    const mid=bids[0]&&asks[0]?(parseFloat(bids[0].px)+parseFloat(asks[0].px))/2:0;
+    $('obMid').textContent=mid?fmt(mid):'—';
+    $('statSpread').textContent=bids[0]&&asks[0]?fmt(parseFloat(asks[0].px)-parseFloat(bids[0].px)):'—';
+  }catch(e){console.error('ob error',e);}
+}
+
+function renderTrades(){
+  const list=$('tradesList');
+  const trades=tradesCache[currentCoin]||[];
+  list.innerHTML=trades.map(t=>`<div class="trade-row"><span class="side ${t.side}">${t.side.toUpperCase()}</span><span>${fmt(t.px)}</span><span>${parseFloat(t.sz).toFixed(2)}</span><span class="ts">${t.ts}</span></div>`).join('');
+}
+
+function updateChartHeader(){
+  const p=getPrice(currentCoin); if(!p)return;
+  const coinObj = coins.find(c=>c.name===currentCoin);
+  const display = coinObj ? (coinObj.friendly || currentCoin) : currentCoin;
+  $('chartPair').textContent=display;
+  const ch = change24hCache[currentCoin]?.change;
+  const cls = (typeof ch==='number') ? (ch>=0?'up':'down') : '';
+  $('chartPrice').textContent=fmt(p); $('chartPrice').className='pair-price '+cls;
+}
+
+function showSynthChartMsg(){
+  if(!chart) return;
+  candleSeries.setData([]);
+  volumeSeries.setData([]);
+  $('statHigh').textContent='—'; $('statLow').textContent='—'; $('statVol').textContent='—'; $('statSpread').textContent='—';
+  // Add a text overlay
+  const overlay = document.createElement('div');
+  overlay.id='synthOverlay';
+  overlay.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--muted);font-size:14px;';
+  overlay.innerHTML='<div style="font-size:32px;margin-bottom:8px">📊</div>Chart history not available for HIP-3 markets.<br>Order book data is live below.';
+  const container = $('chart-container');
+  const old = $('synthOverlay');
+  if(old) old.remove();
+  container.appendChild(overlay);
+}
+
+/* chart panel tabs */
+document.querySelectorAll('.chart-tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    document.querySelectorAll('.chart-tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.ob-panel').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    const panel=tab.dataset.panel;
+    $(`panel-${panel}`).classList.add('active');
+    if(panel==='chart') $('time-bar').classList.remove('hidden');
+    else $('time-bar').classList.add('hidden');
+    if(panel==='orderbook')loadOrderbook();
+    if(panel==='trades')renderTrades();
+    if(panel==='alerts')renderChartAlerts();
+  });
+});
+
+/* time buttons */
+document.querySelectorAll('.time-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.time-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTf=btn.dataset.tf;
+    initChart(); loadChartCandles();
+  });
+});
+
+/* ========== ALERTS ========== */
+function addAlertFromChart(){
+  const price=parseFloat($('chartAlertPrice').value);
+  if(!price)return;
+  alerts.push({id:Date.now(),coin:currentCoin,price,triggered:false});
+  saveAlerts();
+  $('chartAlertPrice').value='';
+  renderChartAlerts();
+  renderAlertsView();
+  showToast(`Alert set: ${currentCoin} @ ${fmt(price)}`);
+}
+function removeAlert(id){
+  alerts=alerts.filter(a=>a.id!==id);
+  saveAlerts();
+  renderChartAlerts();
+  renderAlertsView();
+}
+function renderChartAlerts(){
+  const list=$('chartAlertList');
+  const coinAlerts=alerts.filter(a=>a.coin===currentCoin);
+  list.innerHTML=coinAlerts.map(a=>`<div class="alert-item"><span>${a.coin} @ ${fmt(a.price)} ${a.triggered?'✅':''}</span><button class="del" onclick="removeAlert(${a.id})">×</button></div>`).join('');
+}
+function renderAlertsView(){
+  const list=$('globalAlertList');
+  if(!alerts.length){$('emptyAlerts').style.display='block';list.innerHTML='';return;}
+  $('emptyAlerts').style.display='none';
+  list.innerHTML=alerts.map(a=>`
+    <div class="global-alert-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:16px;font-weight:700;">${a.coin}</span>
+        <span style="font-size:13px;color:var(--muted);">${a.triggered?'✅ Triggered':'⏳ Active'}</span>
+      </div>
+      <div style="font-size:20px;font-weight:700;font-family:monospace;margin-bottom:8px;">${fmt(a.price)}</div>
+      <button onclick="removeAlert(${a.id})" style="background:var(--red);color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Remove</button>
+    </div>
+  `).join('');
+}
+function updateAlertBadge(){
+  const active=alerts.filter(a=>!a.triggered).length;
+  const badge=$('alertBadge');
+  badge.textContent=active; badge.style.display=active?'flex':'none';
+}
+let alerted=new Set();
+function checkAlerts(){
+  alerts.forEach(a=>{
+    if(a.triggered)return;
+    const p=getPrice(a.coin); if(!p)return;
+    const price=parseFloat(p);
+    if(Math.abs(price-a.price)/a.price<0.003){
+      a.triggered=true;
+      saveAlerts();
+      showToast(`🚨 ${a.coin} hit ${fmt(a.price)}!`);
+      if(Notification.permission==='granted')new Notification(`${a.coin} Alert`,{body:`${a.coin} reached ${fmt(a.price)}`});
+    }
+  });
+}
+if('Notification' in window && Notification.permission==='default')Notification.requestPermission();
+
+/* ========== NAV ========== */
+document.querySelectorAll('.nav-item').forEach(item=>{
+  item.addEventListener('click',()=>switchTab(item.dataset.view));
+});
+
+/* Init */
+init();
+</script>
+</body>
+</html>

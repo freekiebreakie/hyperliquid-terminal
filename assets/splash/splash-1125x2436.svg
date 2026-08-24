@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1125 2436" width="1125" height="2436">
+<rect width="1125" height="2436" fill="#07080a"></rect>
+<rect x="571.88" y="1025.06" width="70.31" height="21.09" rx="4.69" fill="#14bfb0" opacity="0.3"></rect><rect x="539.06" y="1055.53" width="103.13" height="21.09" rx="4.69" fill="#14bfb0" opacity="0.55"></rect><rect x="506.25" y="1086.00" width="135.94" height="21.09" rx="4.69" fill="#14bfb0" opacity="0.9"></rect><rect x="482.81" y="1121.16" width="159.38" height="11.72" rx="4.69" fill="#6ee9dc" opacity="1"></rect><rect x="482.81" y="1142.25" width="135.94" height="21.09" rx="4.69" fill="#14bfb0" opacity="0.9"></rect><rect x="482.81" y="1172.72" width="103.13" height="21.09" rx="4.69" fill="#14bfb0" opacity="0.55"></rect><rect x="482.81" y="1203.19" width="70.31" height="21.09" rx="4.69" fill="#14bfb0" opacity="0.3"></rect>
+<text x="562.5" y="1376.4" text-anchor="middle" font-family="Archivo, 'Helvetica Neue', sans-serif" font-weight="800" font-size="104" letter-spacing="-3.64" fill="#f5f8fb">DEPTH</text>
+<text x="562.5" y="2253" text-anchor="middle" font-family="Archivo, 'Helvetica Neue', sans-serif" font-weight="500" font-size="31" letter-spacing="9.36" fill="#5c6674">HYPERLIQUID · READ-ONLY</text>
+</svg>
