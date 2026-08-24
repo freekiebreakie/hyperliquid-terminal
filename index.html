@@ -839,8 +839,6 @@ function renderOnbTiles(){
   const grid=$('onb-tiles');
   const seeds=['BTC','ETH','SOL','HYPE','AAPL','GOLD','SPY','NVDA'];
   const sel=new Set(watchlist);
-  // Check if prices are loaded yet
-  const anyPriceLoaded = seeds.some(s => mids[s] || hip3Mids[s]);
   grid.innerHTML=seeds.map((s,i)=>{
     const coin=coins.find(c=>c.name===s)||{name:s,friendly:s,category:'Crypto',marketType:'perp'};
     const p=getPrice(s);
@@ -848,13 +846,21 @@ function renderOnbTiles(){
     return tileHtml(coin,p,undefined,on,true);
   }).join('');
   onbUpdateCount(sel.size || 4);
-  // If no prices loaded yet, retry in 2 seconds
-  if(!anyPriceLoaded){
-    setTimeout(()=>{
-      const onb=$('onboarding');
-      if(onb && !onb.classList.contains('hidden')) renderOnbTiles();
-    }, 2000);
-  }
+  // Fetch missing HIP-3 prices for seeds directly via l2Book
+  seeds.forEach(async s=>{
+    if(isHip3(s) && !hip3Mids[s] && !mids[s]){
+      try{
+        const ob=await hl('l2Book',{coin:s});
+        if(ob&&ob.levels&&ob.levels[0]&&ob.levels[0][0]&&ob.levels[1]&&ob.levels[1][0]){
+          const bid=parseFloat(ob.levels[0][0].px), ask=parseFloat(ob.levels[1][0].px);
+          mids[s]=(bid+ask)/2;
+          // Re-render onboarding if still visible
+          const onb=$('onboarding');
+          if(onb && !onb.classList.contains('hidden')) renderOnbTiles();
+        }
+      }catch(e){}
+    }
+  });
 }
 function onbUpdateCount(n){ $('onb-count').textContent=n+' selected'; }
 function onbToggle(el,coin){
