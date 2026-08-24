@@ -1000,6 +1000,10 @@ async function refreshMids(){
   for(const [k,v] of Object.entries(raw)){ mids[spotDisplayMap[k]||k]=v; }
   await Promise.all(watchlist.map(c=>fetch24hChange(c).catch(()=>null)));
   renderWatchlist(); renderMarkets(); updateChartHeader(); checkAlerts();
+  // If onboarding is visible, refresh tiles with live prices
+  if($('onboarding') && !$('onboarding').classList.contains('hidden')){
+    requestAnimationFrame(renderOnbTiles);
+  }
 }
 
 async function refreshHip3Mids(){
